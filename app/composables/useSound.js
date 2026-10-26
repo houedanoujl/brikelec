@@ -48,6 +48,11 @@ const SOUNDS = {
   // la ville s'allume : carillon scintillant, en vague
   city: () => [1318.5, 1568, 1760, 2093, 1975.5, 2349.3].forEach((f, i) => tone(f, 0.25 + i * 0.13, 0.6, { vol: 0.1 })),
   badge: () => { tone(1568, 0, 0.12, { vol: 0.18 }); tone(2093, 0.09, 0.3, { vol: 0.16 }) },
+  // feu d'artifice : coup sourd puis crépitement d'étincelles
+  burst: () => {
+    tone(140, 0, 0.35, { type: 'triangle', vol: 0.18, to: 60 })
+    for (let i = 0; i < 9; i++) tone(2200 + Math.random() * 2600, 0.12 + i * 0.045 + Math.random() * 0.03, 0.05, { type: 'square', vol: 0.03 })
+  },
   fanfare: () => {
     const seq = [[523.25, 0], [659.25, 0.16], [783.99, 0.32], [1046.5, 0.5], [783.99, 0.74], [1046.5, 0.9]]
     seq.forEach(([f, t]) => { tone(f, t, 0.5, { type: 'triangle', vol: 0.3 }); tone(f / 2, t, 0.5, { vol: 0.15 }) })

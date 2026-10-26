@@ -9,10 +9,12 @@ const props = defineProps({
   reveal: { type: String, default: null },  // centrale à révéler avec animation
   celebrate: { type: Boolean, default: false },
 })
-const emit = defineEmits(['open', 'revealed'])
+const emit = defineEmits(['open', 'revealed', 'energized'])
 const tagW = p => 50 + p.name.length * 10.5
 const { inner, has } = useArt()
 const host = ref(null)
+const sceneRoot = ref(null)
+const { gsap, reduced, run, loop } = useGsap(sceneRoot)
 const boxes = ref({}) // id → { x, y, w } (en unités du schéma 1200×900)
 const solvedCount = computed(() => PLANTS.filter(p => props.solved[p.id]).length)
 const ready = computed(() => has('ensemble'))
@@ -74,19 +76,146 @@ function apply (instant = false) {
   }
 }
 
+// ------------------------------------------------------------ animations (GSAP)
+const plantGroups = id => [...(host.value?.querySelectorAll(`[data-plant="${id}"]:not(.sil)`) || [])]
+function bboxOf (els) {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
+  els.forEach((g) => {
+    const r = g.getBBox()
+    x0 = Math.min(x0, r.x); y0 = Math.min(y0, r.y); x1 = Math.max(x1, r.x + r.width); y1 = Math.max(y1, r.y + r.height)
+  })
+  return { x0, y0, x1, y1 }
+}
+const between = (a, b) => a + Math.random() * (b - a)
+const rotorAnims = []
+const NS = 'http://www.w3.org/2000/svg'
+
+// Une centrale démarre : pales qui accélèrent, fumée, bulles d'hydrogène
+function startPlant (id, fromZero) {
+  if (reduced.value) return
+  run(() => {
+    for (const g of plantGroups(id)) {
+      g.querySelectorAll('.rotor').forEach((rotor) => {
+        const o = (rotor.style.transformOrigin || '').match(/[\d.]+/g)
+        rotor.style.transformOrigin = ''
+        const anim = loop(gsap.to(rotor, { rotation: '+=360', svgOrigin: o ? `${o[0]} ${o[1]}` : '50% 50%', duration: 7, ease: 'none', repeat: -1 }))
+        anim.timeScale(props.celebrate ? 2 : 1)
+        if (fromZero) gsap.fromTo(anim, { timeScale: 0 }, { timeScale: props.celebrate ? 2 : 1, duration: 3.2, ease: 'power1.in' })
+        rotorAnims.push(anim)
+      })
+      g.querySelectorAll('.smoke').forEach((smoke) => {
+        const b = smoke.getBBox()
+        loop(gsap.timeline({ repeat: -1, repeatDelay: 0.25 }).call(() => puff(b.x + b.width / 2, b.y + b.height * 0.8)).to({}, { duration: 0.9 }))
+      })
+    }
+    if (id === 'hydrogene') {
+      const b = bboxOf(plantGroups(id).slice(0, 1))
+      loop(gsap.timeline({ repeat: -1 }).call(() => bubble(between(b.x0 + 20, b.x0 + 70), b.y0 + 10)).to({}, { duration: 0.55 }))
+    }
+  })
+}
+
+// bouffée de fumée : monte, grossit et se dissipe
+function puff (x, y) {
+  const layer = host.value?.querySelector('.particles')
+  if (!layer) return
+  const c = document.createElementNS(NS, 'circle')
+  Object.entries({ cx: x, cy: y, r: between(7, 10), fill: '#ffffff', opacity: 0.9 }).forEach(([k, v]) => c.setAttribute(k, v))
+  layer.appendChild(c)
+  gsap.to(c, { attr: { r: between(16, 22) }, x: between(-6, 16), y: -between(40, 58), opacity: 0, duration: 3.4, ease: 'sine.out', onComplete: () => c.remove() })
+}
+// bulle d'hydrogène
+function bubble (x, y) {
+  const layer = host.value?.querySelector('.particles')
+  if (!layer) return
+  const c = document.createElementNS(NS, 'circle')
+  Object.entries({ cx: x, cy: y, r: between(2.5, 5), fill: 'none', stroke: '#5aa2e0', 'stroke-width': 2, opacity: 0.95 }).forEach(([k, v]) => c.setAttribute(k, v))
+  layer.appendChild(c)
+  gsap.to(c, { y: -between(30, 48), x: between(-8, 8), opacity: 0, duration: 2.4, ease: 'sine.out', onComplete: () => c.remove() })
+}
+
+// Révélation : la couleur monte en volet par-dessus la silhouette, une ligne
+// orange balaie la construction, puis la centrale démarre et envoie l'énergie
+function revealPlant (id) {
+  const root = host.value
+  const groups = plantGroups(id)
+  if (!root || !groups.length || reduced.value) {
+    apply(false)
+    emit('revealed')
+    emit('energized')
+    return
+  }
+  root.classList.remove('instant')
+  const b = bboxOf(groups)
+  const pad = 14
+  run(() => {
+    const rect = root.querySelector('.reveal-rect')
+    const scan = root.querySelector('.reveal-scan')
+    groups.forEach((g) => { g.setAttribute('clip-path', 'url(#reveal-clip)'); g.style.transition = 'none' })
+    const tl = gsap.timeline({ delay: 0.5 })
+    tl.call(() => apply(false))
+      .fromTo(rect, { attr: { x: b.x0 - pad, width: b.x1 - b.x0 + pad * 2, y: b.y1 + pad, height: 0 } },
+        { attr: { y: b.y0 - pad, height: b.y1 - b.y0 + pad * 2 }, duration: 1.7, ease: 'power2.inOut' }, 0)
+      .fromTo(scan, { attr: { x1: b.x0 - pad, x2: b.x1 + pad, y1: b.y1 + pad, y2: b.y1 + pad }, opacity: 1 },
+        { attr: { y1: b.y0 - pad, y2: b.y0 - pad }, duration: 1.7, ease: 'power2.inOut' }, 0)
+      .to(scan, { opacity: 0, duration: 0.35 })
+      .call(() => {
+        groups.forEach((g) => { g.removeAttribute('clip-path'); g.style.transition = '' })
+        startPlant(id, true)
+        emit('revealed')
+      })
+      .add(energize(), '+=0.6')
+  })
+}
+
+// Impulsion d'énergie : du poste au pylône, puis vers Abidjan (hors de la scène)
+function energize () {
+  const tl = gsap.timeline()
+  const path = host.value.querySelector('#ligne-abidjan')
+  const dot = host.value.querySelector('.energize-dot')
+  if (!path || !dot) return tl.call(() => emit('energized'))
+  tl.set(dot, { opacity: 1, scale: 1 })
+    .to(dot, { duration: 1.4, ease: 'power1.in', motionPath: { path, align: path, alignOrigin: [0.5, 0.5] } })
+    .to(dot, { opacity: 0, duration: 0.2 })
+    .call(() => emit('energized'), null, '-=0.15')
+  return tl
+}
+
+// Nuages : le vent les pousse d'avant en arrière, chacun à son rythme
+function driftClouds () {
+  if (reduced.value) return
+  run(() => {
+    host.value?.querySelectorAll('.cloud').forEach((cl, i) => {
+      loop(gsap.fromTo(cl, { x: -30 - i * 8 }, { x: 55 + i * 10, duration: between(14, 22), ease: 'sine.inOut', yoyo: true, repeat: -1, delay: -between(0, 10) }))
+      loop(gsap.to(cl, { y: between(-4, 4), duration: between(3, 5), ease: 'sine.inOut', yoyo: true, repeat: -1 }))
+    })
+  })
+}
+
+let mounted = false
+const started = new Set()
+function startSolved () {
+  for (const p of PLANTS) {
+    if (props.solved[p.id] && p.id !== props.reveal && !started.has(p.id)) { started.add(p.id); startPlant(p.id, false) }
+  }
+}
 onMounted(() => nextTick(() => {
   decorate()
-  if (props.reveal) {
-    // laisse le temps de voir la silhouette avant la révélation
-    setTimeout(() => { apply(false); setTimeout(() => emit('revealed'), 1600) }, 500)
-  }
+  driftClouds()
+  startSolved()
+  if (props.reveal) { started.add(props.reveal); revealPlant(props.reveal) }
+  mounted = true
 }))
+// partie restaurée après le montage (rechargement de la page) : on rattrape
+watch(() => props.reveal, (id) => { if (id && mounted && !started.has(id)) { started.add(id); revealPlant(id) } })
+watch(() => props.solved, () => { if (mounted) nextTick(startSolved) }, { deep: true })
+watch(() => props.celebrate, (on) => rotorAnims.forEach(a => gsap.to(a, { timeScale: on ? 2 : 1, duration: 1.5 })))
 watch(() => props.solved, () => apply(false), { deep: true })
 watch(markup, () => nextTick(decorate))
 </script>
 
 <template>
-  <div class="scene" :class="{ celebrate }">
+  <div ref="sceneRoot" class="scene" :class="{ celebrate }">
     <svg v-if="ready" ref="host" class="art" viewBox="0 0 1200 900" role="img" aria-label="La centrale du futur : vue d'ensemble des cinq centrales">
       <defs>
         <filter id="silhouette" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">
@@ -98,6 +227,7 @@ watch(markup, () => nextTick(decorate))
           <feComposite in="e" in2="edge" operator="in" result="stroke" />
           <feMerge><feMergeNode in="fill" /><feMergeNode in="stroke" /></feMerge>
         </filter>
+        <clipPath id="reveal-clip"><rect class="reveal-rect" x="0" y="0" width="0" height="0" /></clipPath>
       </defs>
       <g v-html="markup" />
       <!-- impulsions d'énergie : du poste au pylône, puis vers Abidjan -->
@@ -109,6 +239,10 @@ watch(markup, () => nextTick(decorate))
           </animateMotion>
         </circle>
       </g>
+      <!-- fumées, bulles, ligne de construction, impulsion vers Abidjan (GSAP) -->
+      <g class="particles" aria-hidden="true" />
+      <line class="reveal-scan" x1="0" y1="0" x2="0" y2="0" aria-hidden="true" />
+      <circle class="energize-dot" cx="0" cy="0" r="9" aria-hidden="true" />
       <!-- étiquettes : invitent à toucher les centrales encore éteintes -->
       <g class="tags" aria-hidden="true">
         <g
@@ -143,29 +277,22 @@ watch(markup, () => nextTick(decorate))
 .art.instant :deep(.plant), .art.instant :deep(.sil) { transition: none; }
 .art :deep([id^="legende-"]:not(.on)) { opacity: .55; }
 .art :deep([id^="legende-"]) { transition: opacity .6s; }
-/* ciel vivant : nuages qui dérivent, soleil qui tourne lentement (silhouette comprise) */
-.art :deep(.cloud) { animation: drift 16s ease-in-out infinite alternate; }
-.art :deep(.cloud-2) { animation-duration: 21s; animation-delay: -6s; }
-.art :deep(.cloud-3) { animation-duration: 18s; animation-delay: -11s; }
+/* ciel vivant : nuages animés par GSAP ; soleil qui tourne lentement (silhouette comprise) */
 .art :deep(.sun) { animation: turn 60s linear infinite; }
-@keyframes drift { from { transform: translateX(-18px); } to { transform: translateX(22px); } }
 @keyframes turn { to { transform: rotate(360deg); } }
 /* chaque centrale allumée s'anime ; à 5/5, la scène entière s'emballe */
-.art :deep(.plant.on .rotor) { animation: spin 7s linear infinite; }
-.art :deep(.plant.on .smoke) { animation: puff 3.4s ease-in-out infinite; }
 .art :deep(.plant.on .sun) { animation: turn 40s linear infinite, glow 4s ease-in-out infinite; }
 .art :deep(#hydrogene.on) { animation: h2 2.8s ease-in-out infinite; }
-.celebrate .art :deep(.plant.on .rotor) { animation-duration: 3.5s; }
 .art :deep(.sil) { animation: breathe 2.8s ease-in-out infinite; }
 .art :deep(.plant.on + .sil) { animation: none; }
 .pulse { fill: #ffd76a; stroke: #ed7f06; stroke-width: 2; }
+.reveal-scan { stroke: #ed7f06; stroke-width: 4; stroke-linecap: round; opacity: 0; }
+.energize-dot { fill: #fff3b0; stroke: #ed7f06; stroke-width: 3; opacity: 0; }
 .tag { cursor: pointer; }
 .tag .bob { animation: bob 2.8s ease-in-out infinite; }
 .tag rect { fill: #fff; stroke: #1f2832; stroke-width: 3; }
 .tag text { font-family: 'Baloo 2', sans-serif; font-weight: 700; font-size: 19px; fill: #1f2832; }
 .tag:hover rect { fill: #fff3d1; }
-@keyframes spin { to { transform: rotate(360deg); } }
-@keyframes puff { 0%, 100% { transform: translateY(0); opacity: 1; } 50% { transform: translateY(-7px); opacity: .85; } }
 @keyframes glow { 0%, 100% { scale: 1; } 50% { scale: 1.07; } }
 @keyframes h2 { 0%, 100% { filter: none; } 50% { filter: brightness(1.08) saturate(1.15); } }
 @keyframes breathe { 0%, 100% { opacity: 1; } 50% { opacity: .72; } }

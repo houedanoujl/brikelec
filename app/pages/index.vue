@@ -15,6 +15,13 @@ watch(loaded, (v) => {
   state.value.reveal = null
 }, { immediate: true })
 
+// Éclairage d'Abidjan : la centrale tout juste assemblée n'alimente la ville
+// qu'une fois son énergie arrivée (révélation → impulsion sur la ligne → ville).
+const cityLevel = ref(0)
+const cityEl = ref(null)
+watch(loaded, (v) => { if (v) cityLevel.value = solvedCount.value - (reveal.value ? 1 : 0) }, { immediate: true })
+watch(solvedCount, (n) => { if (n < cityLevel.value) cityLevel.value = n })
+
 function open (id) { navigateTo(`/puzzle/${id}`) }
 // emplacement de la technicienne près de chaque centrale (unités du schéma 1200×900)
 const GREET = { hydrogene: 250, biomasse: 470, cycle: 690, solaire: 860, eolien: 330 }
@@ -30,18 +37,25 @@ const lastSolved = computed(() => state.value.order[state.value.order.length - 1
 const showFinal = ref(false)
 const celebrate = computed(() => allSolved.value)
 const { play } = useSound()
-// une centrale vient d'être assemblée : mise sous tension, puis la ville s'allume
+// une centrale vient d'être assemblée : bruit de mise sous tension pendant la
+// révélation ; le carillon de la ville est joué par Abidjan quand elle s'allume
 watch(reveal, (id) => {
   if (!id) return
   setTimeout(() => play('power'), 500)
-  setTimeout(() => play('city'), 1500)
 }, { immediate: true })
 function onRevealed () {
   if (allSolved.value && !state.value.celebrated) {
     state.value.celebrated = true
     setTimeout(() => play('fanfare'), 300)
   }
-  if (allSolved.value && !state.value.submitted) setTimeout(() => { showFinal.value = true }, 600)
+}
+// l'énergie arrive au bord de la scène : on montre la ville, qui s'allume ;
+// à 5/5, le bilan s'ouvre après le final (feux d'artifice)
+function onEnergized () {
+  const smooth = !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  cityEl.value?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'center' })
+  setTimeout(() => { cityLevel.value = solvedCount.value }, smooth ? 500 : 0)
+  if (allSolved.value && !state.value.submitted) setTimeout(() => { showFinal.value = true }, smooth ? 15000 : 600)
 }
 onMounted(() => {
   if (allSolved.value && !state.value.submitted && !reveal.value) showFinal.value = true
@@ -117,7 +131,7 @@ const meEntry = computed(() => state.value.submitted
     <main class="main">
       <div class="stack">
         <ClientOnly>
-          <OverviewScene :solved="solvedMap" :reveal="reveal" :celebrate="celebrate" @open="open" @revealed="onRevealed">
+          <OverviewScene :solved="solvedMap" :reveal="reveal" :celebrate="celebrate" @open="open" @revealed="onRevealed" @energized="onEnergized">
             <!-- techniciens CIPREL : l'un parcourt la route, l'autre fête la dernière centrale allumée -->
             <g class="walker" aria-hidden="true">
               <g transform="translate(0 688)"><CiprelTechnician variant="homme" pose="walk" :size="112" /></g>
@@ -128,11 +142,11 @@ const meEntry = computed(() => state.value.submitted
           </OverviewScene>
           <template #fallback><div class="scene-ph" /></template>
         </ClientOnly>
-        <div class="city">
-          <AbidjanSkyline :level="solvedCount" :celebrate="allSolved" />
+        <div ref="cityEl" class="city">
+          <AbidjanSkyline :level="cityLevel" :celebrate="allSolved && cityLevel >= 5" />
           <p class="city-tag">
             <AppIcon name="bolt" :size="18" />
-            {{ allSolved ? 'Abidjan est entièrement alimentée' : `Abidjan alimentée à ${solvedCount * 20} %` }}
+            {{ cityLevel >= 5 ? 'Abidjan est entièrement alimentée' : `Abidjan alimentée à ${cityLevel * 20} %` }}
           </p>
         </div>
       </div>

@@ -13,11 +13,24 @@ const emit = defineEmits(['validate', 'complete', 'announce', 'first-move', 'pic
 
 const uid = useId().replace(/[^\w-]/g, '')
 const { play } = useSound()
+const wrap = ref(null)
+const { gsap, reduced: lowMotion, run } = useGsap(wrap)
+// petits gestes GSAP : la pièce se tasse en se calant, les pièces justes se verrouillent en cascade
+const innerOf = p => wrap.value?.querySelector(`.piece[data-idx="${p.idx}"] .piece-inner`)
+function settle (p) {
+  if (lowMotion.value) return
+  const el = innerOf(p)
+  if (el) run(() => gsap.fromTo(el, { scale: 1.05, transformOrigin: '50% 50%' }, { scale: 1, duration: 0.35, ease: 'back.out(3)', delay: 0.18, clearProps: 'transform' }))
+}
+function cascade () {
+  if (lowMotion.value) return
+  const els = [...(wrap.value?.querySelectorAll('.piece[role="button"] .piece-inner') || [])]
+  run(() => gsap.fromTo(els, { scale: 1, transformOrigin: '50% 50%' }, { scale: 1.035, duration: 0.16, yoyo: true, repeat: 1, stagger: 0.08, ease: 'sine.out', clearProps: 'transform' }))
+}
 const { art, inner } = useArt()
 
 // ---------- Mise en page (paysage : bac à droite ; portrait : bac dessous)
 const M = 70 // marge pour les lobes qui dépassent du plateau
-const wrap = ref(null)
 const portrait = ref(false)
 const layout = computed(() => portrait.value
   ? { W: WIDTH + 2 * M, H: HEIGHT + 2 * M + 680, bx: M, by: M, tray: { x: 10, y: HEIGHT + 2 * M, w: WIDTH + 2 * M - 20, h: 660, cols: 3, rows: 2, s: 0.7 } }
@@ -116,6 +129,8 @@ watch(allLocked, (done) => {
       path.classList.add('flux')
       path.style.setProperty('--period', `${period}px`)
     }
+    const fluxes = [...root.querySelectorAll('.flux')]
+    if (!lowMotion.value && fluxes.length) run(() => gsap.from(fluxes, { opacity: 0, duration: 0.5, stagger: 0.18, delay: 0.6 }))
     setTimeout(() => { flowing.value = true }, 1400)
   })
 })
@@ -192,6 +207,7 @@ function drop (p, k) {
   p.cell = k
   home(p)
   play('snap')
+  settle(p)
   if (!moved) { moved = true; emit('first-move') }
   emit('announce', `${p.label} posée en case ${k + 1}.`)
   if (filled.value) setTimeout(validate, 380)
@@ -205,6 +221,7 @@ function validate () {
   pieces.value.forEach(p => { if (p.cell === p.idx) p.locked = true })
   if (!wrong.length) {
     play('lock')
+    cascade()
     emit('validate', { wrong: 0 })
     setTimeout(() => emit('complete'), 450)
     return
@@ -339,6 +356,7 @@ const fullArt = computed(() => inner(props.plant.id))
         v-for="p in sorted"
         :key="p.idx"
         class="piece"
+        :data-idx="p.idx"
         :class="[`is-${p.state}`, { 'is-locked': p.locked, 'is-selected': selected === p }]"
         :style="{ transform: `translate(${p.x}px, ${p.y}px) scale(${p.s})` }"
         :tabindex="p.locked ? -1 : 0"
