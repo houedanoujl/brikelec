@@ -104,16 +104,23 @@ const PLATEAU = [
   [714, 44, 126, '#7b8d9b', 'step'],
   [756, 32, 162, '#5f6f7e', 'flat'],
   [784, 38, 182, '#6b7b8b', 'flat'],
-  [448, 30, 186, '#5f6f7e', 'flat'],
+  [484, 28, 186, '#5f6f7e', 'flat'],
   [664, 34, 176, '#5f6f7e', 'flat'],
 ]
 const towers = PLATEAU.map(([x, w, top, fill, roof]) => {
-  const t = { x, w, top, fill, roof, h: GROUND - top }
+  const t = { x, w, top, fill, roof, h: GROUND - top, from: windows.length }
   const body = roof === 'step' ? top + 14 : top
   grid(x, body, w, GROUND - body)
   if (roof === 'step') grid(x + 7, top, w - 14, 14, { mt: 5, mb: 3 })
+  t.to = windows.length
   return t
 })
+// les fenêtres d'un immeuble masquées par un immeuble placé devant lui sont retirées
+{
+  const front = (w, i) => towers.slice(i + 1).some(f => w.x + w.w > f.x && w.x < f.x + f.w && w.y + w.h > f.top - 3)
+  const kept = windows.filter((w, k) => !towers.some((t, i) => k >= t.from && k < t.to && front(w, i)))
+  windows.splice(0, windows.length, ...kept)
+}
 
 // ------------------------------------------------------------ rives (Cocody)
 // Petits immeubles et maisons à gauche et à droite.
@@ -228,23 +235,27 @@ const lamps = []
 for (let x = 562; x <= 1190; x += 36) lamps.push({ x, s: step() })
 
 // ------------------------------------------------------------ cathédrale Saint-Paul
-// D'après les photos : tour-personnage (corps, tête, bras tendu vers l'ouest, deux
-// jambes en A) reliée par des haubans au toit bleu en pente ; nef blanche au mur
-// courbe percé d'arcs.
-const roofTop = x => 116 + (x - 360) * (72 / 118) // arête haute du toit : (360,116) → (478,188)
-const roofUnder = x => roofTop(x) + 10
+// D'après les photos de la façade : tour-personnage (deux jambes écartées, fût,
+// bras droit tendu vers l'ouest, grand bloc de tête), un seul câble épais vers la
+// pointe de la nef ; nef claire en deux courbes concaves depuis la pointe, doubles
+// croix sombres, portes en arc (qui s'allument).
 const CA_TOWER = [
-  '296,238 308,238 330,150 322,148', // jambe arrière
-  '338,238 350,238 342,150 331,150', // jambe avant
-  '322,150 343,150 339,72 326,72', // corps
-  '325,72 341,72 343,54 329,48', // tête
+  '296,238 309,238 328,142 320,139', // jambe gauche, écartée
+  '338,238 350,238 344,142 333,142', // jambe droite
+  '320,144 344,144 343,100 323,100', // fût
+  '324,101 341,101 346,38 333,33', // bloc de tête
 ]
-const CA_ARM = 'M327,99 L298,95'
-const CA_ROOF = '360,116 478,188 478,198 360,126'
-const CA_WALL = 'M350,238 Q369,182 360,126 L478,198 L478,238 Z'
-const CA_ARCHES = [[386, 402], [430, 446]].map(([a, b]) => `M${a},238 L${a},226 Q${(a + b) / 2},214 ${b},226 L${b},238 Z`)
-const caCables = [372, 392, 412, 432, 452].map((x, i) => ({ x1: 340, y1: 60 + i * 4, x2: x, y2: r2(roofTop(x)) }))
-const naveWindows = [370, 415, 456, 467].map(x => ({ x: x - 2, y: r2(roofUnder(x) + 8), h: r2(Math.max(10, 222 - roofUnder(x) - 8)), s: step() }))
+const CA_ARM = 'M327,104 L297,102' // bras droit, sans courbure
+const CA_PEAK = [381, 126] // pointe de la nef, où arrive le câble
+const CA_WALL = `M346,238 Q372,206 ${CA_PEAK.join(',')} Q402,198 478,203 L478,238 Z`
+const CA_ROOF = `M${CA_PEAK.join(',')} Q402,198 478,203 L478,197 Q405,190 384,124 Z` // toit bleu visible au-dessus du mur
+const CA_CABLE = { x1: 343, y1: 62, x2: CA_PEAK[0] - 1, y2: CA_PEAK[1] + 1 }
+const cross = (x, y, h) => `M${x - 2},${y} V${y + h} M${x + 2},${y + 2} V${y + h + 2} M${x - 6},${y + 6} H${x + 6} M${x - 4},${y + 10} H${x + 8}`
+const CA_CROSSES = [cross(412, 206, 22), cross(446, 208, 22)]
+// portes en arc : elles s'allument palier par palier, comme les fenêtres
+const arch = (x, w, h) => `M${x},238 V${238 - h + w / 2} Q${x + w / 2},${238 - h - w / 3} ${x + w},${238 - h + w / 2} V238 Z`
+const CA_ARCHES = [arch(370, 11, 30), arch(392, 9, 18), arch(463, 8, 12)]
+const naveWindows = [{ x: 372, y: 214, w: 7, h: 24 }, { x: 394, y: 225, w: 5, h: 13 }, { x: 465, y: 230, w: 4, h: 8 }].map(d => ({ ...d, s: step() }))
 
 // ------------------------------------------------------------ palmiers
 function palm (x, h, lean, scale = 1) {
@@ -261,7 +272,7 @@ function palm (x, h, lean, scale = 1) {
 }
 const palms = [
   palm(30, 52, 6), palm(112, 66, -8, 1.1), palm(200, 44, 5, 0.9),
-  palm(300, 46, -6, 0.9), palm(948, 48, 6), palm(1074, 60, -7, 1.05), palm(1188, 50, -6),
+  palm(476, 42, -5, 0.85), palm(948, 48, 6), palm(1074, 60, -7, 1.05), palm(1188, 50, -6),
 ]
 
 // ------------------------------------------------------------ câble électrique
@@ -339,7 +350,7 @@ function finale () {
     .fromTo('.beacon', { scale: 0, transformOrigin: '50% 50%' }, { scale: 1, duration: 0.6, ease: 'back.out(4)' }, '>-0.1')
     .fromTo('.hauban', { stroke: '#8d9dac' }, { stroke: (i, el) => (el.classList.contains('left') ? '#ff9a3c' : '#2fbf71'), duration: 0.3, stagger: 0.09, immediateRender: true }, 0.5)
     .fromTo('.pylon-a', { fill: '#d5dbe1' }, { fill: '#f2a25a', duration: 0.9 }, 1.4)
-    .fromTo('.cathedral .win', { fill: ON }, { fill: '#fff1c4', duration: 0.4, stagger: 0.08, repeat: 1, yoyo: true }, 1.2)
+    .fromTo('.cathedral-windows .win', { fill: ON }, { fill: '#fff1c4', duration: 0.4, stagger: 0.08, repeat: 1, yoyo: true }, 1.2)
     .set('.fct, .hauban, .pylon-a, .beacon', { clearProps: 'fill,stroke,scale,transform' })
     .call(startFinaleLoops)
   // salves de feux d'artifice pendant une douzaine de secondes
@@ -560,22 +571,22 @@ defineExpose({ powerUp, burst })
 
       <!-- cathédrale Saint-Paul -->
       <g class="cathedral" :filter="furl">
+        <path class="roof" :d="CA_ROOF" />
         <path class="nave" :d="CA_WALL" />
         <path v-for="(a, i) in CA_ARCHES" :key="'ar' + i" class="arch" :d="a" />
-        <polygon class="roof" :points="CA_ROOF" />
-        <line
-          v-for="(c, i) in caCables" :key="'cc' + i" class="ca-cable"
-          :x1="c.x1" :y1="c.y1" :x2="c.x2" :y2="c.y2" stroke-width="1"
-        />
-        <!-- tour en forme de personnage : deux jambes en A, corps, tête, bras -->
+        <path v-for="(c, i) in CA_CROSSES" :key="'cr' + i" class="cross" :d="c" fill="none" stroke-width="1.6" stroke-linecap="square" />
+        <!-- un seul câble épais, du haut de la tour à la pointe de la nef -->
+        <line class="ca-cable" :x1="CA_CABLE.x1" :y1="CA_CABLE.y1" :x2="CA_CABLE.x2" :y2="CA_CABLE.y2" stroke-width="2.6" stroke-linecap="round" />
+        <!-- tour en forme de personnage : deux jambes écartées, fût, bras, tête -->
         <polygon v-for="(pts, i) in CA_TOWER" :key="'ct' + i" class="mast" :points="pts" />
-        <path class="mast-stroke" :d="CA_ARM" fill="none" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
+        <path class="mast-stroke" :d="CA_ARM" fill="none" stroke-width="6.5" stroke-linecap="round" />
       </g>
 
+      <!-- portes de la cathédrale (lumières, hors du filtre gris) -->
       <g class="cathedral-windows">
         <rect
           v-for="(w, i) in naveWindows" :key="'nw' + i" class="win"
-          :data-step="w.s" :x="w.x" :y="w.y" width="4" :height="w.h" rx="1"
+          :data-step="w.s" :x="w.x" :y="w.y" :width="w.w" :height="w.h" rx="1.5"
         />
       </g>
 
@@ -736,7 +747,8 @@ defineExpose({ powerUp, burst })
 .on-5 .refl[data-step="5"] { stroke: #c9a24e; }
 
 /* ------------------------------------------------ cathédrale */
-.nave { fill: #dfe5ea; }
+.nave { fill: #e6e0d4; }
+.cross { stroke: #4d5c6b; }
 .arch { fill: #3a4b63; }
 .roof { fill: #2a7eba; }
 .mast { fill: #f3f7fa; }
