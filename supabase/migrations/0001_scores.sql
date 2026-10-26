@@ -85,3 +85,6 @@ $$;
 
 revoke all on function public.submit_score(text, jsonb) from public;
 grant execute on function public.submit_score(text, jsonb) to anon, authenticated;
+
+-- Rafraîchit le cache de l API (rend la table et la fonction visibles tout de suite)
+notify pgrst, 'reload schema';

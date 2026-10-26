@@ -26,14 +26,21 @@ export function publicEntry (e, i) {
 export async function topScores (limit) {
   const sb = supabase()
   if (sb) {
-    const res = await $fetch.raw(`${sb.base}/rest/v1/scores`, {
-      headers: { ...sb.headers, Prefer: 'count=exact' },
-      query: {
-        select: 'id,name,kwh,time_s,errors,perfect,created_at',
-        order: 'kwh.desc,time_s.asc,errors.asc,created_at.asc',
-        limit,
-      },
-    })
+    let res
+    try {
+      res = await $fetch.raw(`${sb.base}/rest/v1/scores`, {
+        headers: { ...sb.headers, Prefer: 'count=exact' },
+        query: {
+          select: 'id,name,kwh,time_s,errors,perfect,created_at',
+          order: 'kwh.desc,time_s.asc,errors.asc,created_at.asc',
+          limit,
+        },
+      })
+    } catch (e) {
+      // détail dans les logs serveur, message neutre côté navigateur
+      console.error('[classement] lecture Supabase impossible :', e?.data?.message || e?.message)
+      throw createError({ statusCode: 502, statusMessage: 'Classement indisponible.' })
+    }
     const total = +(res.headers.get('content-range') || '').split('/')[1] || res._data.length
     const entries = res._data.map((r, i) => publicEntry({
       id: r.id, name: r.name, kwh: r.kwh, time: r.time_s, errors: r.errors, perfect: r.perfect, at: Date.parse(r.created_at),
@@ -60,8 +67,10 @@ export async function saveScore (name, plants) {
         entry: { rank: r.rank, id: r.id, name, kwh: r.kwh, time: r.time, errors: r.errors, perfect: r.errors === 0, at: Date.now() },
       }
     } catch (e) {
-      const msg = e?.data?.message
-      throw createError({ statusCode: e?.statusCode === 400 ? 400 : 502, statusMessage: msg || 'Classement indisponible.' })
+      // 400 : refus de submit_score (message de validation, à afficher) ; sinon panne
+      if (e?.statusCode === 400 && e?.data?.message) throw createError({ statusCode: 400, statusMessage: e.data.message })
+      console.error('[classement] envoi Supabase impossible :', e?.data?.message || e?.message)
+      throw createError({ statusCode: 502, statusMessage: 'Classement indisponible.' })
     }
   }
   const { randomUUID } = await import('node:crypto')

@@ -65,6 +65,20 @@ Il passe par l'API Nitro `GET/POST /api/scores`, qui valide les données côté 
 
 `NUXT_PUBLIC_SITE_URL` sert à construire les liens de partage (LinkedIn, WhatsApp, Facebook, X).
 
+## Mise en ligne sur Vercel
+
+Nuxt est détecté automatiquement par Vercel : aucune configuration à ajouter. Les SVG des schémas sont versionnés, donc le build sur Vercel n'a pas besoin de la police Trebuchet MS.
+
+Dans **Project Settings → Environment Variables** (Production et Preview), définir :
+
+| Variable | Valeur |
+|---|---|
+| `NUXT_SUPABASE_URL` | `https://yzgbqpmopzhjefyyrzzr.supabase.co` |
+| `NUXT_SUPABASE_KEY` | la clé **publishable** du projet (`sb_publishable_…`), jamais la clé secrète |
+| `NUXT_PUBLIC_SITE_URL` | l'adresse publique du jeu (liens de partage) |
+
+Sur Vercel, le disque des fonctions n'est pas conservé : le stockage local de secours ne sert qu'en développement, et le classement doit passer par Supabase.
+
 ## Interface
 
 Direction « jeu illustré » aux couleurs CIPREL (voir `DESIGN.md`) :
