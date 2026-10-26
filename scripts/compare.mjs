@@ -29,7 +29,7 @@ function lab (r, g, b) {
 
 let allOk = true
 for (const id of ids) {
-  const ref = jpeg.decode(readFileSync(join(root, `reference/${id}.jpg`)), { useTArray: true })
+  const ref = jpeg.decode(readFileSync(join(root, `public/reference/${id}.jpg`)), { useTArray: true })
   const { width: W, height: H } = ref
   const svg = readFileSync(join(root, `app/assets/svg/${id}.svg`), 'utf8')
   const out = new Resvg(svg, {

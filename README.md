@@ -14,7 +14,7 @@ Les PDF du client ne contiennent qu'une image JPEG à 4× la taille de la page, 
 
 | Dossier / fichier | Rôle |
 |---|---|
-| `reference/*.jpg` | images d'origine extraites des PDF (référence de comparaison) |
+| `public/reference/*.jpg` | images d'origine extraites des PDF (référence de comparaison, aussi servies à `/comparaison`) |
 | `art/<id>.mjs` | source de chaque schéma (exporte le SVG ; primitives mesurées) |
 | `art/lib.mjs` | briques communes : étiquettes en pastille, flux en pointillés… |
 | `app/utils/jigsaw.js` | géométrie des découpes, ajustée sur la position de chaque tiret du PDF |
@@ -52,6 +52,19 @@ Les 11 récompenses sont définies dans `app/composables/useGame.js` :
 - Podium
 - Carte souvenir
 
-## Classement
+## Classement (Supabase)
 
-Il passe par l'API Nitro `GET/POST /api/scores`, qui valide les données côté serveur. Les scores sont stockés via `useStorage('scores')` : un fichier `.data/scores` en local. **En production**, il faut monter un driver persistant sur `scores` dans `nuxt.config.ts` (Redis, Upstash, Vercel KV…), car le disque des fonctions serverless n'est pas conservé.
+Il passe par l'API Nitro `GET/POST /api/scores`, qui valide les données côté serveur. Deux modes de stockage :
+- **Supabase**, si `NUXT_SUPABASE_URL` et `NUXT_SUPABASE_KEY` (clé publishable) sont définis (voir `.env.example`). Exécuter une fois `supabase/migrations/0001_scores.sql` dans l'éditeur SQL du projet. La table est en lecture publique ; les écritures passent uniquement par la fonction `submit_score`, qui valide la partie côté base.
+- **Secours** : sans ces variables, les scores sont stockés via Nitro dans `.data/scores` (développement local).
+
+`NUXT_PUBLIC_SITE_URL` sert à construire les liens de partage (LinkedIn, WhatsApp, Facebook, X).
+
+## Interface
+
+Direction « jeu illustré » aux couleurs CIPREL (voir `DESIGN.md`) :
+- polices Baloo 2 et Nunito ;
+- techniciens CIPREL comme guides (`CiprelTechnician.vue`, `GuideBubble.vue`) ;
+- skyline d'Abidjan (Tour F, pont ADO, cathédrale Saint-Paul), qui s'allume au fil des centrales (`AbidjanSkyline.vue`) ;
+- sons synthétisés avec Web Audio (`useSound.js`), coupables d'un bouton ;
+- animations désactivées si le système demande de réduire les mouvements (`prefers-reduced-motion`).

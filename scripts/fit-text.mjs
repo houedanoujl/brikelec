@@ -9,7 +9,7 @@ import { loadFont } from './fonts.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const [id, text, x0, y0, x1, y1, weight = 'bold', ink = '#1f2832', tolS = '60'] = process.argv.slice(2)
-const img = jpeg.decode(readFileSync(join(root, `reference/${id}.jpg`)), { useTArray: true })
+const img = jpeg.decode(readFileSync(join(root, `public/reference/${id}.jpg`)), { useTArray: true })
 const S = img.width / (id === 'ensemble' ? 1200 : 900)
 const c = [1, 3, 5].map(i => parseInt(ink.slice(i, i + 2), 16))
 const tol = +tolS
