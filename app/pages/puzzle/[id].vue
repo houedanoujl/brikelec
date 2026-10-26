@@ -43,7 +43,7 @@ const placedCount = ref(0)
 // ---------- Guide : technicienne CIPREL (règles au premier puzzle, puis encouragements)
 const TIPS = [
   { text: 'Bienvenue ! Glisse les 6 pièces du bac sur le plateau pour reconstituer le schéma (au clavier : Tab, Entrée, puis les flèches).', pose: 'wave' },
-  { text: 'Les formes des pièces peuvent tromper : suis plutôt les tuyaux, les câbles et les flux d’énergie.', pose: 'point' },
+  { text: 'Chaque tenon montre ce qui passe d’un composant au suivant (rond : fluide, flèche : énergie, clé : matière, queue d’aronde : mouvement), et il pointe dans le sens du flux.', pose: 'point' },
   { text: 'Je ne vérifie qu’une fois le plateau plein : les bonnes pièces se verrouillent, les autres reviennent au bac.', pose: 'think' },
 ]
 const tip = ref(0)
@@ -57,7 +57,8 @@ const event = ref(null) // message lié à une action du joueur
 const guide = computed(() => {
   if (!state.value.onboarded) return TIPS[tip.value]
   if (event.value) return event.value
-  if (placedCount.value === 0) return { text: `Centrale ${plant.name} : à toi de jouer ! Touche une pièce pour la voir en grand.`, pose: 'idle' }
+  if (done.value) return { text: `Centrale ${plant.name} assemblée : l’énergie circule d’un composant à l’autre !`, pose: 'cheer' }
+  if (placedCount.value === 0) return { text: `Centrale ${plant.name} : suis le trajet de l’énergie, d’un tenon à l’autre. Touche une pièce pour la voir en grand.`, pose: 'idle' }
   if (placedCount.value < 6) return { text: `${placedCount.value} pièce${placedCount.value > 1 ? 's' : ''} sur 6. Continue, je vérifie quand le plateau est plein.`, pose: 'idle' }
   return { text: 'Vérification…', pose: 'think' }
 })
@@ -177,6 +178,7 @@ const boardKey = ref(0)
         <button class="btn" type="button" @click="nextTip">{{ tip < TIPS.length - 1 ? 'Suivant' : 'C’est parti !' }}</button>
       </div>
       <button v-else class="btn ghost icon help-btn" type="button" aria-label="Revoir les règles" @click="replayTips"><AppIcon name="info" /></button>
+      <FlowLegend :edges="plant.edges" :compact="narrow" class="legend-row" />
     </div>
 
     <main class="stage">
@@ -193,9 +195,9 @@ const boardKey = ref(0)
           @progress="placedCount = $event"
         />
       </ClientOnly>
-      <Transition name="flash">
-        <div v-if="flash" class="flash" :class="flash.kind" role="status">{{ flash.text }}</div>
-        <div v-else-if="picked" class="flash picked" aria-hidden="true">{{ picked }}</div>
+      <Transition name="flash" mode="out-in">
+        <div v-if="flash" key="flash" class="flash" :class="flash.kind" role="status">{{ flash.text }}</div>
+        <div v-else-if="picked" key="picked" class="flash picked" aria-hidden="true">{{ picked }}</div>
       </Transition>
     </main>
     <p class="sr-only" aria-live="polite">{{ message }}</p>
@@ -261,6 +263,7 @@ const boardKey = ref(0)
 .guide-row { display: flex; align-items: center; gap: 12px; min-height: 64px; }
 .guide-row > :first-child { flex: 0 1 auto; min-width: 0; }
 .guide-actions { flex: none; }
+.legend-row { margin-left: auto; justify-content: flex-end; max-width: 46%; }
 .tip-strip { display: flex; align-items: center; gap: 8px; background: var(--surface); border: 2px solid var(--ink); border-radius: 18px; padding: 4px 12px 4px 4px; }
 .tip-strip p { font-weight: 700; font-size: .92rem; line-height: 1.3; }
 .stage { position: relative; flex: 1; min-height: 0; }
@@ -278,7 +281,10 @@ const boardKey = ref(0)
 @media (max-width: 560px) {
   .page { padding: 8px 12px 10px; }
   .hint-label { display: none; }
-  .guide-row { align-items: center; min-height: 0; }
+  .guide-row { align-items: center; min-height: 0; flex-wrap: wrap; row-gap: 6px; }
+  .guide-row > :first-child { flex: 1 1 100%; }
+  .help-btn { order: 2; width: 40px; min-height: 40px; }
+  .legend-row { margin-left: 0; max-width: none; justify-content: flex-start; order: 3; flex: 1 1 0; }
   .guide-actions .btn { min-height: 44px; padding: .4rem .9rem; font-size: .95rem; }
 }
 

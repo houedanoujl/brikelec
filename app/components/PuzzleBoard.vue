@@ -2,7 +2,8 @@
 // Plateau d'un puzzle : 6 pièces découpées dans le schéma 1:1 du client.
 // Une seule scène SVG (plateau + bac), pilotée par Pointer Events
 // (souris, tactile, stylet) et au clavier.
-import { CELL, COLS, ROWS, WIDTH, HEIGHT, piecePath, CUT_COLOR, CUT_DASH, CUT_HALO, CUT_WIDTH } from '~/utils/jigsaw'
+import { CELL, COLS, ROWS, WIDTH, HEIGHT, piecePath, cellFlows, CUT_COLOR, CUT_DASH, CUT_HALO, CUT_WIDTH } from '~/utils/jigsaw'
+import { FLOW_TYPES } from '~/data/plants'
 
 const props = defineProps({
   plant: { type: Object, required: true },
@@ -65,7 +66,6 @@ const cellPos = k => ({ x: layout.value.bx + (k % COLS) * CELL, y: layout.value.
 function setup () {
   const rand = rng((Date.now() ^ (Math.random() * 1e9)) >>> 0)
   const slots = [...Array(N).keys()].sort(() => rand() - 0.5)
-  const sign = () => (rand() < 0.5 ? 1 : -1)
   pieces.value = [...Array(N).keys()].map(i => ({
     idx: i, c: i % COLS, r: Math.floor(i / COLS),
     label: props.plant.pieces[i],
@@ -74,8 +74,6 @@ function setup () {
     locked: false,
     z: i,
     jx: (rand() - 0.5) * 24, jy: (rand() - 0.5) * 24,
-    // lobes leurres des bords extérieurs, tirés à chaque partie
-    decoys: { top: sign(), right: sign(), bottom: 1, left: sign() },
     x: 0, y: 0, s: 1,
     state: 'idle', // idle | drag | wrong
   }))
@@ -123,7 +121,8 @@ watch(allLocked, (done) => {
 })
 
 function outline (p) {
-  return piecePath(p.c, p.r, { decoys: p.locked ? false : p.decoys })
+  // emboîtement logique : un tenon par flux, dans le sens du flux (data/plants.js)
+  return piecePath(p.c, p.r, props.plant.edges)
 }
 
 // ---------- Glisser-déposer
@@ -272,9 +271,13 @@ function onKey (e, p) {
   }
 }
 
+// description des tenons pour les lecteurs d'écran : « envoie de l'énergie à droite »…
+const flowText = p => cellFlows(p.c, p.r, props.plant.edges)
+  .map(f => `${f.sends ? 'envoie' : 'reçoit'} ${FLOW_TYPES[f.type].phrase} ${f.side === 'haut' || f.side === 'bas' ? 'en' : 'à'} ${f.side}`)
+  .join(', ')
 const ariaFor = p => p.locked
   ? `${p.label}, bien placée`
-  : `Pièce ${p.label}${p.cell !== null ? `, posée en case ${p.cell + 1}` : ', dans le bac'}`
+  : `Pièce ${p.label}${p.cell !== null ? `, posée en case ${p.cell + 1}` : ', dans le bac'}${flowText(p) ? ` ; ${flowText(p)}` : ''}`
 
 // Les étiquettes sont retirées du dessin découpé : chaque pièce affiche la sienne
 // en entier (dans le PDF, certains lobes traversent l'étiquette de la case voisine).
@@ -349,10 +352,23 @@ const fullArt = computed(() => inner(props.plant.id))
           <g :transform="`translate(${-p.c * CELL} ${-p.r * CELL})`">
             <path :d="outline(p)" :fill="plant.bg[p.r]" />
             <use :href="`#art-${uid}`" :clip-path="`url(#clip-${uid}-${p.idx})`" />
-            <g class="own-label" v-html="split.labels[p.idx]" />
             <path class="cut-halo" :d="outline(p)" fill="none" :stroke-width="CUT_HALO" />
             <path class="cut" :d="outline(p)" fill="none" :stroke="CUT_COLOR" :stroke-width="CUT_WIDTH" :stroke-dasharray="CUT_DASH" />
           </g>
+        </g>
+      </g>
+
+      <!-- noms des pièces : calque au-dessus de toutes les pièces, toujours lisibles -->
+      <g
+        v-for="p in sorted"
+        :key="`l${p.idx}`"
+        class="piece piece-label"
+        :class="`is-${p.state}`"
+        :style="{ transform: `translate(${p.x}px, ${p.y}px) scale(${p.s})` }"
+        aria-hidden="true"
+      >
+        <g class="piece-inner">
+          <g :transform="`translate(${-p.c * CELL} ${-p.r * CELL})`" v-html="split.labels[p.idx]" />
         </g>
       </g>
 
@@ -365,9 +381,9 @@ const fullArt = computed(() => inner(props.plant.id))
       <svg :viewBox="`${held.c * CELL - 70} ${held.r * CELL - 70} ${CELL + 140} ${CELL + 140}`">
         <path :d="outline(held)" :fill="plant.bg[held.r]" />
         <use :href="`#art-${uid}`" :clip-path="`url(#clip-${uid}-${held.idx})`" />
-        <g v-html="split.labels[held.idx]" />
         <path :d="outline(held)" fill="none" stroke="#fff" :stroke-width="CUT_HALO" />
         <path :d="outline(held)" fill="none" :stroke="CUT_COLOR" :stroke-width="CUT_WIDTH" :stroke-dasharray="CUT_DASH" />
+        <g v-html="split.labels[held.idx]" />
       </svg>
       <p>{{ held.label }}</p>
     </div>
@@ -385,14 +401,15 @@ const fullArt = computed(() => inner(props.plant.id))
 .piece.is-drag { cursor: grabbing; transition: none; }
 .settling .piece { transition: none; }
 .piece.is-locked { cursor: default; }
+.piece-label { pointer-events: none; }
 .piece.is-locked .cut, .piece.is-locked .cut-halo { opacity: 0; transition: opacity .3s; }
 .cut-halo { stroke: #fff; }
 .piece:focus-visible .cut-halo, .piece.is-selected .cut-halo { stroke: var(--accent); stroke-width: 12; }
 .piece.is-wrong .piece-inner { animation: shake .5s ease-in-out; }
 .final { animation: fade .5s ease both; pointer-events: none; }
 /* une fois le schéma reconstitué : découpes effacées, énergie qui circule */
-.final :deep(#decoupes) { transition: opacity .8s ease; }
-.final.flowing :deep(#decoupes) { opacity: 0; }
+/* le jeu a ses propres découpes logiques : le schéma final s'affiche sans celles du PDF */
+.final :deep(#decoupes) { display: none; }
 .final.flowing :deep(.flux) { animation: flux 1.1s linear infinite; }
 @keyframes flux { to { stroke-dashoffset: calc(-1 * var(--period, 18px)); } }
 .loupe {

@@ -26,11 +26,16 @@ Les textes sont convertis en tracés parce que Trebuchet MS n'existe pas sur And
 
 ## Mécanique du puzzle
 
-- Les pièces sont découpées dans le schéma avec la forme exacte des lobes du PDF : une fois assemblé, le puzzle est identique au document du client.
-- Pour que l'emboîtement ne saute pas aux yeux :
-  - des lobes leurres, tirés au hasard à chaque partie, bordent les côtés extérieurs ;
-  - le plateau n'affiche aucune silhouette ;
-  - on ne vérifie qu'une fois les 6 cases remplies : les pièces justes se verrouillent, les fausses retournent au bac et comptent comme erreurs.
+- **Emboîtement logique** : chaque tenon correspond à un flux qui passe d'un composant à l'autre. Il est placé là où le flux franchit l'arête dans le schéma, pointe dans le sens du flux, et sa forme dépend du type de flux :
+  - rond pour un fluide (eau, vapeur, gaz, hydrogène, air) ; c'est le lobe du PDF ;
+  - flèche pour l'énergie (électricité, lumière) ;
+  - clé carrée pour la matière (bois, structure) ;
+  - queue d'aronde crantée pour le mouvement (arbre en rotation).
+  
+  Les connexions sont décrites par centrale dans `app/data/plants.js` (`edges`) et la géométrie est dans `app/utils/jigsaw.js` (`TABS`). Une arête sans flux reste plate. `node scripts/preview-pieces.mjs <id>` produit une vue éclatée des pièces pour relecture.
+- Les dessins restent au 1:1. Une fois le puzzle juste, le schéma du client s'affiche en entier (sans les découpes) et l'énergie y circule.
+- Le plateau n'affiche aucune silhouette, et on ne vérifie qu'une fois les 6 cases remplies : les pièces justes se verrouillent, les fausses retournent au bac et comptent comme erreurs.
+- Le nom de chaque pièce reste lisible : il est retiré du dessin découpé et redessiné au-dessus de toutes les pièces.
 - Commandes :
   - souris, tactile ou stylet (Pointer Events) ;
   - clavier : Tab, Entrée pour prendre une pièce, flèches pour choisir la case, Entrée pour la poser, Échap pour annuler, Retour arrière pour renvoyer une pièce au bac.
