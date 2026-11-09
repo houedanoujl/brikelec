@@ -50,12 +50,13 @@
           ]
         },
         {
-          "target": "portable",
+          "target": "zip",
           "arch": [
             "x64"
           ]
         }
-      ]
+      ],
+      "artifactName": "La-centrale-du-futur-TEST-PC-${version}.${ext}"
     },
     "nsis": {
       "oneClick": true,
@@ -64,9 +65,6 @@
       "createDesktopShortcut": true,
       "shortcutName": "La centrale du futur",
       "artifactName": "La-centrale-du-futur-BORNE-Setup-${version}.${ext}"
-    },
-    "portable": {
-      "artifactName": "La-centrale-du-futur-TEST-PC-${version}.${ext}"
     }
   }
 }

@@ -70,7 +70,8 @@ Les textes sont convertis en tracés parce que Trebuchet MS n'existe pas sur And
   - Avec un clavier branché, `Ctrl+Maj+Q` quitte aussi. Alt+F4 ne ferme pas la borne.
 - **Deux exécutables** (`npm run kiosk:build`, dans `dist-electron/`, x64, non signés, testés depuis macOS sans Wine) :
   - `La-centrale-du-futur-BORNE-Setup-<version>.exe` : installeur de la borne. Plein écran verrouillé, lancement à l'ouverture de session.
-  - `La-centrale-du-futur-TEST-PC-<version>.exe` : version portable pour essayer le jeu sur un PC de bureau, sans installation. Fenêtre agrandie qui se ferme normalement, F11 pour le plein écran, aucun lancement automatique. Le mode test est détecté par `PORTABLE_EXECUTABLE_FILE`, ou forcé avec `--test`.
+  - `La-centrale-du-futur-TEST-PC-<version>.zip` : version de test pour un PC de bureau, sans installation. On extrait le dossier, puis on lance `La centrale du futur.exe`. Fenêtre agrandie qui se ferme normalement, F11 pour le plein écran, aucun lancement automatique.
+  - Le mode est choisi au lancement : l'application installée par l'installeur (désinstalleur présent à côté de l'exécutable) est la borne ; toute autre copie est en mode test. `--test` force le mode test.
   - Icône par défaut d'Electron tant qu'aucune icône CIPREL 256 px n'est fournie (`build.win.icon`). Windows SmartScreen avertit au premier lancement (« Informations complémentaires », puis « Exécuter quand même »).
 - **Réglages Windows conseillés** sur la borne :
   - ouverture de session automatique ;

@@ -4,9 +4,11 @@
 // localStorage, est conservé d'un lancement à l'autre (dossier de l'application).
 //
 // Deux modes :
-// - borne (installeur NSIS) : plein écran verrouillé, lancement à l'ouverture de session ;
-// - test (exécutable portable, ou --test) : fenêtre agrandie qui se ferme normalement,
-//   F11 pour le plein écran, pas de lancement automatique. Pour essayer le jeu sur un PC de bureau.
+// - borne (application installée par l'installeur NSIS) : plein écran verrouillé,
+//   lancement à l'ouverture de session ;
+// - test (archive ZIP ou portable, ou --test) : fenêtre agrandie qui se ferme
+//   normalement, F11 pour le plein écran, pas de lancement automatique. Pour essayer
+//   le jeu sur un PC de bureau.
 // Lancement : npm run kiosk:dev (ajouter -- --test pour une fenêtre normale)
 // Quitter : Ctrl+Maj+Q, ou l'espace personnel (5 touchers sur le logo CIPREL).
 const { app, BrowserWindow, protocol, session, powerSaveBlocker, ipcMain } = require('electron')
@@ -16,8 +18,14 @@ const fs = require('node:fs')
 const SCHEME = 'app'
 const ORIGIN = `${SCHEME}://borne`
 const ROOT = path.join(__dirname, '..', '.output', 'public')
-// electron-builder renseigne PORTABLE_EXECUTABLE_FILE pour l'exécutable portable
-const TEST = !!process.env.PORTABLE_EXECUTABLE_FILE || process.argv.includes('--test') || process.argv.includes('--windowed')
+// L'installeur NSIS dépose « Uninstall <nom>.exe » à côté de l'application : c'est la borne.
+// Sans lui (archive ZIP, portable), c'est la version de test. En développement : borne.
+function installedByKioskSetup () {
+  if (!app.isPackaged) return true
+  try { return fs.readdirSync(path.dirname(process.execPath)).some(f => /^Uninstall .*\.exe$/i.test(f)) } catch { return false }
+}
+const TEST = process.argv.includes('--test') || process.argv.includes('--windowed') ||
+  !!process.env.PORTABLE_EXECUTABLE_FILE || !installedByKioskSetup()
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
