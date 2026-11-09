@@ -127,7 +127,32 @@ app.on('second-instance', () => {
   win.focus()
 })
 
-ipcMain.on('kiosk:quit', () => { quitting = true; app.quit() })
+// Code du personnel : vérifié ici, jamais transmis à la page. Il se règle sur
+// chaque borne dans borne.json (dossier de l'application) : { "pin": "4 à 8 chiffres" }.
+// Trois erreurs : accès bloqué 60 s. Quitter n'est possible qu'après un code juste.
+const DEFAULT_PIN = '2026'
+function staffPin () {
+  try {
+    const cfg = JSON.parse(fs.readFileSync(path.join(app.getPath('userData'), 'borne.json'), 'utf8'))
+    if (/^\d{4,8}$/.test(String(cfg?.pin))) return String(cfg.pin)
+  } catch { /* pas de fichier : code par défaut */ }
+  return DEFAULT_PIN
+}
+let pinFails = 0
+let pinLockedUntil = 0
+let staffUntil = 0
+ipcMain.handle('kiosk:check-pin', (_e, pin) => {
+  const now = Date.now()
+  if (now < pinLockedUntil) return { ok: false, wait: Math.ceil((pinLockedUntil - now) / 1000) }
+  if (String(pin) === staffPin()) { pinFails = 0; staffUntil = now + 5 * 60_000; return { ok: true } }
+  if (++pinFails >= 3) { pinFails = 0; pinLockedUntil = now + 60_000; return { ok: false, wait: 60 } }
+  return { ok: false }
+})
+ipcMain.on('kiosk:quit', () => {
+  if (Date.now() > staffUntil) return
+  quitting = true
+  app.quit()
+})
 
 app.whenReady().then(() => {
   protocol.handle(SCHEME, serve)

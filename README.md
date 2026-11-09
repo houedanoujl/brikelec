@@ -64,7 +64,10 @@ Les textes sont convertis en tracés parce que Trebuchet MS n'existe pas sur And
   - le réglage Windows « réduire les animations » est ignoré, pour garder le final : le preload expose `window.kiosk`, la page pose la classe `kiosk` sur `<html>`, ce qui neutralise les règles `prefers-reduced-motion` et `useGsap().reduced`.
 - **Classement** : seule donnée conservée, dans le localStorage de l'application (`%APPDATA%\La centrale du futur\Local Storage`, clé `centrale-du-futur:classement:v1`, 200 parties au plus). Il survit aux redémarrages. La partie en cours, elle, reste en mémoire : rien ne passe d'un joueur au suivant.
 - **Inactivité** : après 60 s sans contact (accueil, bilan, conseils, échec), la partie est remise à zéro et l'accueil s'affiche. Le minuteur est suspendu pendant le compte à rebours et pendant l'animation finale.
-- **Personnel** : 5 touchers rapides sur le logo CIPREL ouvrent l'espace personnel (code `2026`, réglable dans `app/utils/kiosk.js`). On peut y effacer le classement et quitter l'application. Avec un clavier branché, `Ctrl+Maj+Q` quitte aussi. Alt+F4 ne ferme pas la borne.
+- **Personnel** : 5 touchers rapides sur le logo CIPREL ouvrent l'espace personnel, qui permet d'effacer le classement et de quitter l'application.
+  - Le code est vérifié par l'application (`electron/main.cjs`), jamais par la page. Par défaut `2026` ; **à changer sur chaque borne** dans `%APPDATA%\La centrale du futur\borne.json` : `{ "pin": "4 à 8 chiffres" }`.
+  - Trois erreurs bloquent l'accès 60 s. Quitter n'est possible que dans les 5 minutes qui suivent un code juste.
+  - Avec un clavier branché, `Ctrl+Maj+Q` quitte aussi. Alt+F4 ne ferme pas la borne.
 - **Deux exécutables** (`npm run kiosk:build`, dans `dist-electron/`, x64, non signés, testés depuis macOS sans Wine) :
   - `La-centrale-du-futur-BORNE-Setup-<version>.exe` : installeur de la borne. Plein écran verrouillé, lancement à l'ouverture de session.
   - `La-centrale-du-futur-TEST-PC-<version>.exe` : version portable pour essayer le jeu sur un PC de bureau, sans installation. Fenêtre agrandie qui se ferme normalement, F11 pour le plein écran, aucun lancement automatique. Le mode test est détecté par `PORTABLE_EXECUTABLE_FILE`, ou forcé avec `--test`.

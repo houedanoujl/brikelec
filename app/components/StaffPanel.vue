@@ -17,9 +17,14 @@ const canQuit = computed(() => import.meta.client && !!window.kiosk?.quit)
 watch(() => props.open, (o) => {
   if (o) { pin.value = ''; unlocked.value = false; error.value = ''; confirmClear.value = false; message.value = '' }
 })
-function check () {
-  if (pin.value === KIOSK.staffPin) { unlocked.value = true; error.value = '' }
-  else { error.value = 'Code incorrect.'; pin.value = '' }
+async function check () {
+  // borne : vérification par l'application (code réglable, blocage après 3 erreurs)
+  const res = window.kiosk?.checkPin
+    ? await window.kiosk.checkPin(pin.value)
+    : { ok: pin.value === KIOSK.browserPin }
+  pin.value = ''
+  if (res.ok) { unlocked.value = true; error.value = '' }
+  else error.value = res.wait ? `Trop d’essais : réessayez dans ${res.wait} s.` : 'Code incorrect.'
 }
 function wipe () {
   clear()
