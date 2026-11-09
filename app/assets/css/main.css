@@ -1,5 +1,44 @@
 /* Direction « Jeu illustré » (voir DESIGN.md) : l'interface prolonge le monde
    des schémas du client, aux couleurs CIPREL. Les schémas gardent leurs couleurs. */
+
+/* Polices servies par le jeu lui-même (borne hors ligne) : public/fonts */
+/* Baloo 2, latin-ext */
+@font-face {
+  font-family: 'Baloo 2';
+  font-style: normal;
+  font-weight: 600 800;
+  font-display: block;
+  src: url(/fonts/baloo2-latin-ext.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* Baloo 2, latin */
+@font-face {
+  font-family: 'Baloo 2';
+  font-style: normal;
+  font-weight: 600 800;
+  font-display: block;
+  src: url(/fonts/baloo2-latin.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* Nunito, latin-ext */
+@font-face {
+  font-family: 'Nunito';
+  font-style: normal;
+  font-weight: 500 800;
+  font-display: block;
+  src: url(/fonts/nunito-latin-ext.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* Nunito, latin */
+@font-face {
+  font-family: 'Nunito';
+  font-style: normal;
+  font-weight: 500 800;
+  font-display: block;
+  src: url(/fonts/nunito-latin.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
 :root {
   --ink: #1f2832;
   --ink-2: #44525f;
@@ -33,6 +72,11 @@
 
 *, *::before, *::after { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; }
+/* borne tactile : pas de sélection, pas de menu d'appui long, pas de rebond ni de zoom au double tap */
+html {
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+  overscroll-behavior: none; touch-action: manipulation;
+}
 body {
   font-family: var(--font-body);
   font-weight: 500;
@@ -93,6 +137,7 @@ svg :focus-visible { outline: none; }
 .stars { display: inline-flex; gap: 2px; color: var(--energy); }
 .stars .off { color: #c3cbd3; }
 
+/* sur la borne (classe kiosk), le final reste animé même si Windows réduit les animations */
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+  html:not(.kiosk) *, html:not(.kiosk) *::before, html:not(.kiosk) *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }

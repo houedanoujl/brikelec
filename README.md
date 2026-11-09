@@ -1,11 +1,13 @@
 # La centrale du futur : le puzzle
 
-Jeu Nuxt 4 de type drag & drop, qui marche aussi bien sur téléphone que sur ordinateur. La vue d'ensemble « La centrale du futur » montre cinq centrales en silhouette : hydrogène, biomasse, cycle combiné, solaire et éolien. Chacune cache un puzzle de 6 pièces. Une fois le puzzle juste, la centrale s'allume dans le paysage. Le jeu comprend un score en kWh, 11 récompenses et un classement partagé.
+Jeu Nuxt 4 de type drag & drop, conçu pour une **borne tactile Windows hors ligne** (application Electron), et qui marche aussi dans un navigateur. La vue d'ensemble « La centrale du futur » montre cinq centrales en couleur : hydrogène, biomasse, cycle combiné, solaire et éolien. Le joueur en **choisit une seule** et doit assembler ses 6 pièces en **2 minutes**. S'il réussit, seule sa centrale démarre et alimente **Abidjan à 100 %** ; sinon, un message d'échec s'affiche. Le classement est local à la borne.
 
 ```bash
 npm install
 npm run dev          # http://localhost:3000
-npm run build        # build de production (.output)
+npm run generate     # site statique (.output/public), sans serveur
+npm run kiosk:dev    # site généré + application Electron (ajouter -- --test pour une fenêtre normale)
+npm run kiosk:build  # installeur Windows (dist-electron/)
 ```
 
 ## Schémas fidèles au 1:1
@@ -34,56 +36,51 @@ Les textes sont convertis en tracés parce que Trebuchet MS n'existe pas sur And
   
   Les connexions sont décrites par centrale dans `app/data/plants.js` (`edges`) et la géométrie est dans `app/utils/jigsaw.js` (`TABS`). Une arête sans flux reste plate. `node scripts/preview-pieces.mjs <id>` produit une vue éclatée des pièces pour relecture.
 - Les dessins restent au 1:1. Une fois le puzzle juste, le schéma du client s'affiche en entier (sans les découpes) et l'énergie y circule.
+- Le chrono s'arrête dès que le plateau est juste (pas à l'affichage du bilan).
 - Le plateau n'affiche aucune silhouette, et on ne vérifie qu'une fois les 6 cases remplies : les pièces justes se verrouillent, les fausses retournent au bac et comptent comme erreurs.
 - Le nom de chaque pièce reste lisible : il est retiré du dessin découpé et redessiné au-dessus de toutes les pièces.
 - Commandes :
   - souris, tactile ou stylet (Pointer Events) ;
   - clavier : Tab, Entrée pour prendre une pièce, flèches pour choisir la case, Entrée pour la poser, Échap pour annuler, Retour arrière pour renvoyer une pièce au bac.
 
-## Score et récompenses
+## Règles et score
 
-Une centrale rapporte 1000 kWh, moins 2 par seconde et 50 par erreur, avec un plancher de 100. S'y ajoutent les bonus « Sans faute » (+200) et « Éclair » (+150, en moins de 45 s), puis un multiplicateur de série : ×1,2 après 2 puzzles sans faute d'affilée, ×1,5 à partir de 3. Chaque coup de pouce utilisé coûte 100 kWh.
+- Une partie = **une centrale**, choisie sur l'accueil (confirmation, puis puzzle).
+- Les conseils s'affichent à chaque partie ; le **compte à rebours de 2:00** démarre au « C'est parti ! ». Il passe au rouge dans les 20 dernières secondes.
+- À 0:00, le plateau se fige (une pièce tenue retourne à sa place) et le message « Échec : temps écoulé » s'affiche. La partie n'est pas classée.
+- Réussite : **1000 kWh + 10 kWh par seconde restante** (2200 kWh au maximum). Les erreurs sont affichées mais ne comptent pas : elles coûtent déjà du temps. Étoiles selon le temps : 3 en 1 min ou moins, 2 en 1 min 30 ou moins, 1 au-delà.
+- Les réglages sont dans `app/composables/useGame.js` (`RULES`).
+- Final : seule la centrale choisie démarre (rotors, fumée, bulles), l'énergie part vers Abidjan, qui s'allume à 100 % avec feux d'artifice. Le bilan permet d'entrer un pseudo au clavier tactile du jeu (`TouchKeyboard.vue`) ; le score rejoint le classement.
 
-Les 11 récompenses sont définies dans `app/composables/useGame.js` :
-- Étincelle
-- Sans faute
-- Éclair
-- Série verte
-- Coup de pouce
-- Trois étoiles
-- Encyclopédiste (fiches « Le saviez-vous ? »)
-- Centrale du futur
-- Mix parfait
-- Podium
-- Carte souvenir
+## Borne hors ligne (Electron)
 
-## Classement (Supabase)
-
-Il passe par l'API Nitro `GET/POST /api/scores`, qui valide les données côté serveur. Deux modes de stockage :
-- **Supabase**, si `NUXT_SUPABASE_URL` et `NUXT_SUPABASE_KEY` (clé publishable) sont définis (voir `.env.example`). Exécuter une fois `supabase/migrations/0001_scores.sql` dans l'éditeur SQL du projet. La table est en lecture publique ; les écritures passent uniquement par la fonction `submit_score`, qui valide la partie côté base.
-- **Secours** : sans ces variables, les scores sont stockés via Nitro dans `.data/scores` (développement local).
-
-`NUXT_PUBLIC_SITE_URL` sert à construire les liens de partage (LinkedIn, WhatsApp, Facebook, X).
-
-## Mise en ligne sur Vercel
-
-Nuxt est détecté automatiquement par Vercel : aucune configuration à ajouter. Les SVG des schémas sont versionnés, donc le build sur Vercel n'a pas besoin de la police Trebuchet MS.
-
-Dans **Project Settings → Environment Variables** (Production et Preview), définir :
-
-| Variable | Valeur |
-|---|---|
-| `NUXT_SUPABASE_URL` | `https://yzgbqpmopzhjefyyrzzr.supabase.co` |
-| `NUXT_SUPABASE_KEY` | la clé **publishable** du projet (`sb_publishable_…`), jamais la clé secrète |
-| `NUXT_PUBLIC_SITE_URL` | l'adresse publique du jeu (liens de partage) |
-
-Sur Vercel, le disque des fonctions n'est pas conservé : le stockage local de secours ne sert qu'en développement, et le classement doit passer par Supabase.
+- **Aucune ressource distante** : polices Baloo 2 et Nunito servies depuis `public/fonts`, sons synthétisés, pas de serveur. `nuxt.config.ts` est en `ssr: false` et le site est généré par `nuxt generate`.
+- `electron/main.cjs` sert `.output/public` sous l'origine fixe `app://borne/`, en plein écran kiosque :
+  - pas de zoom, de menu contextuel ni de navigation externe ;
+  - toute requête réseau est bloquée ;
+  - l'écran ne se met pas en veille ;
+  - redémarrage de la page si elle plante ;
+  - lancement à l'ouverture de session Windows (version installée) ;
+  - le réglage Windows « réduire les animations » est ignoré, pour garder le final : le preload expose `window.kiosk`, la page pose la classe `kiosk` sur `<html>`, ce qui neutralise les règles `prefers-reduced-motion` et `useGsap().reduced`.
+- **Classement** : seule donnée conservée, dans le localStorage de l'application (`%APPDATA%\La centrale du futur\Local Storage`, clé `centrale-du-futur:classement:v1`, 200 parties au plus). Il survit aux redémarrages. La partie en cours, elle, reste en mémoire : rien ne passe d'un joueur au suivant.
+- **Inactivité** : après 60 s sans contact (accueil, bilan, conseils, échec), la partie est remise à zéro et l'accueil s'affiche. Le minuteur est suspendu pendant le compte à rebours et pendant l'animation finale.
+- **Personnel** : 5 touchers rapides sur le logo CIPREL ouvrent l'espace personnel (code `2026`, réglable dans `app/utils/kiosk.js`). On peut y effacer le classement et quitter l'application. Avec un clavier branché, `Ctrl+Maj+Q` quitte aussi. Alt+F4 ne ferme pas la borne.
+- **Deux exécutables** (`npm run kiosk:build`, dans `dist-electron/`, x64, non signés, testés depuis macOS sans Wine) :
+  - `La-centrale-du-futur-BORNE-Setup-<version>.exe` : installeur de la borne. Plein écran verrouillé, lancement à l'ouverture de session.
+  - `La-centrale-du-futur-TEST-PC-<version>.exe` : version portable pour essayer le jeu sur un PC de bureau, sans installation. Fenêtre agrandie qui se ferme normalement, F11 pour le plein écran, aucun lancement automatique. Le mode test est détecté par `PORTABLE_EXECUTABLE_FILE`, ou forcé avec `--test`.
+  - Icône par défaut d'Electron tant qu'aucune icône CIPREL 256 px n'est fournie (`build.win.icon`). Windows SmartScreen avertit au premier lancement (« Informations complémentaires », puis « Exécuter quand même »).
+- **Réglages Windows conseillés** sur la borne :
+  - ouverture de session automatique ;
+  - veille et économiseur d'écran désactivés ;
+  - gestes de bord d'écran coupés (stratégie `AllowEdgeSwipe = 0`) ;
+  - notifications désactivées.
 
 ## Interface
 
 Direction « jeu illustré » aux couleurs CIPREL (voir `DESIGN.md`) :
 - polices Baloo 2 et Nunito ;
 - techniciens CIPREL comme guides (`CiprelTechnician.vue`, `GuideBubble.vue`) ;
-- skyline d'Abidjan (Tour F, pont ADO, cathédrale Saint-Paul), qui s'allume au fil des centrales (`AbidjanSkyline.vue`) ;
-- sons synthétisés avec Web Audio (`useSound.js`), coupables d'un bouton ;
-- animations désactivées si le système demande de réduire les mouvements (`prefers-reduced-motion`).
+- techniciens CIPREL dans la tenue des équipes (combinaison marine, passepoil orange, bandes réfléchissantes, casque bleu à coquilles) ;
+- skyline d'Abidjan (Tour F, pont ADO, cathédrale Saint-Paul), qui s'allume quand la centrale choisie démarre (`AbidjanSkyline.vue`) ;
+- sons synthétisés avec Web Audio (`useSound.js`), coupables d'un bouton (le son revient à chaque nouvelle partie) ;
+- animations désactivées si le système demande de réduire les mouvements (`prefers-reduced-motion`), sauf dans l'application de la borne.

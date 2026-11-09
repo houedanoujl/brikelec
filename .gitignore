@@ -25,3 +25,6 @@ logs
 
 # Cartes de comparaison générées par scripts/compare.mjs
 reference/diff
+
+# Application Electron (npm run kiosk:build)
+dist-electron

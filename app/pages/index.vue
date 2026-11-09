@@ -1,231 +1,225 @@
 <script setup>
-import { PLANTS } from '~/data/plants'
-import { BADGES, formatTime, formatKwh } from '~/composables/useGame'
+// Accueil de la borne.
+// - choose : les cinq centrales en couleur ; le joueur en choisit UNE à assembler.
+// - finale : après la réussite, seule la centrale choisie démarre et alimente
+//   Abidjan à 100 % ; bilan, pseudo et classement.
+import { PLANTS, PLANT_BY_ID } from '~/data/plants'
+import { RULES, formatTime, formatKwh } from '~/composables/useGame'
+import { cleanName } from '~/composables/useLeaderboard'
+import { KIOSK, prefersReducedMotion } from '~/utils/kiosk'
 
 const game = useGame()
-const { state, totals, solvedCount, allSolved } = game
-const loaded = useState('game-loaded')
-
-const solvedMap = computed(() => Object.fromEntries(PLANTS.map(p => [p.id, !!state.value.plants[p.id]])))
-const reveal = ref(null)
-// La centrale tout juste assemblée est révélée une seule fois, à l'arrivée.
-watch(loaded, (v) => {
-  if (!v) return
-  reveal.value = state.value.reveal
-  state.value.reveal = null
-}, { immediate: true })
-
-// Éclairage d'Abidjan : la centrale tout juste assemblée n'alimente la ville
-// qu'une fois son énergie arrivée (révélation → impulsion sur la ligne → ville).
-const cityLevel = ref(0)
-const cityEl = ref(null)
-watch(loaded, (v) => { if (v) cityLevel.value = solvedCount.value - (reveal.value ? 1 : 0) }, { immediate: true })
-watch(solvedCount, (n) => { if (n < cityLevel.value) cityLevel.value = n })
-
-function open (id) { navigateTo(`/puzzle/${id}`) }
-// emplacement de la technicienne près de chaque centrale (unités du schéma 1200×900)
-const GREET = { hydrogene: 250, biomasse: 470, cycle: 690, solaire: 860, eolien: 330 }
-const guideText = computed(() => {
-  const n = solvedCount.value
-  if (!n) return 'Bienvenue chez CIPREL ! Chaque centrale grisée cache un puzzle de 6 pièces. Touche-la pour la reconstituer.'
-  if (n < 5) return `Bravo ! Abidjan est alimentée à ${n * 20} %. Encore ${5 - n} centrale${5 - n > 1 ? 's' : ''} à allumer.`
-  return 'Mission accomplie : les 5 centrales tournent et tout Abidjan est éclairée !'
-})
-const lastSolved = computed(() => state.value.order[state.value.order.length - 1] || null)
-
-// ---------- Fin de partie
-const showFinal = ref(false)
-const celebrate = computed(() => allSolved.value)
+const { state } = game
+const leaderboard = useLeaderboard()
+const hold = useIdleHold()
 const { play } = useSound()
-// une centrale vient d'être assemblée : bruit de mise sous tension pendant la
-// révélation ; le carillon de la ville est joué par Abidjan quand elle s'allume
-watch(reveal, (id) => {
-  if (!id) return
-  setTimeout(() => play('power'), 500)
-}, { immediate: true })
-function onRevealed () {
-  if (allSolved.value && !state.value.celebrated) {
-    state.value.celebrated = true
-    setTimeout(() => play('fanfare'), 300)
-  }
+
+// arrivée sur l'accueil pendant ou après un puzzle (abandon, échec, inactivité) : nouvelle partie
+if (state.value.phase !== 'choose' && state.value.phase !== 'finale') game.reset({ remount: false })
+const finale = computed(() => state.value.phase === 'finale')
+const chosen = computed(() => PLANT_BY_ID[state.value.chosen] || null)
+const result = computed(() => state.value.result)
+
+// ---------- Choix de la centrale
+const pending = ref(null) // centrale en attente de confirmation
+function ask (id) {
+  if (finale.value || !PLANT_BY_ID[id]) return
+  pending.value = PLANT_BY_ID[id]
+  play('pick')
 }
-// l'énergie arrive au bord de la scène : on montre la ville, qui s'allume ;
-// à 5/5, le bilan s'ouvre après le final (feux d'artifice)
-function onEnergized () {
-  const smooth = !window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  cityEl.value?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'center' })
-  setTimeout(() => { cityLevel.value = solvedCount.value }, smooth ? 500 : 0)
-  if (allSolved.value && !state.value.submitted) setTimeout(() => { showFinal.value = true }, smooth ? 15000 : 600)
+function start () {
+  const id = pending.value.id
+  pending.value = null
+  game.choose(id)
+  navigateTo(`/puzzle/${id}`)
 }
+
+// ---------- Final : la centrale choisie démarre, l'énergie arrive, Abidjan s'allume à 100 %
+const cityLevel = ref(0)
+const celebrate = ref(false)
+const cityEl = ref(null)
+const energized = ref(false)
+const showFinal = ref(false)
+// emplacement du technicien qui fête la centrale (unités du schéma 1200×900)
+const GREET = { hydrogene: 250, biomasse: 470, cycle: 690, solaire: 860, eolien: 330 }
+const smooth = () => !prefersReducedMotion()
 onMounted(() => {
-  if (allSolved.value && !state.value.submitted && !reveal.value) showFinal.value = true
+  // nouvelle partie : le joueur suivant retrouve l'accueil en haut de page
+  if (!finale.value) { window.scrollTo(0, 0); return }
+  hold.value = true // pas de retour à l'accueil pendant l'animation
+  setTimeout(() => play('power'), 500)
+})
+onBeforeUnmount(() => { hold.value = false })
+function onRevealed () { setTimeout(() => play('fanfare'), 300) }
+function onEnergized () {
+  energized.value = true
+  const s = smooth()
+  cityEl.value?.scrollIntoView({ behavior: s ? 'smooth' : 'auto', block: 'center' })
+  setTimeout(() => { cityLevel.value = 5; celebrate.value = true }, s ? 500 : 0)
+  setTimeout(() => { showFinal.value = true; hold.value = false }, s ? 12000 : 600)
+}
+
+const guideText = computed(() => {
+  if (!finale.value) return 'Bienvenue chez CIPREL ! Choisis UNE centrale parmi les 5 : tu auras 2 minutes pour assembler ses 6 pièces et alimenter tout Abidjan.'
+  if (!energized.value) return `La centrale ${chosen.value?.name} démarre…`
+  return `Bravo ! Ta centrale ${chosen.value?.name} alimente Abidjan à 100 % !`
 })
 
+// ---------- Score : pseudo saisi au clavier de la borne, classement local
 const name = ref('')
-watch(loaded, v => { if (v) name.value = state.value.name }, { immediate: true })
-const sending = ref(false)
 const sendError = ref('')
-async function submit () {
+function save () {
   sendError.value = ''
-  const n = name.value.trim()
+  const n = cleanName(name.value)
   if (n.length < 2) { sendError.value = 'Choisissez un pseudo d’au moins 2 caractères.'; return }
-  sending.value = true
-  try {
-    const res = await $fetch('/api/scores', { method: 'POST', body: { name: n, plants: state.value.plants } })
-    state.value.name = n
-    state.value.submitted = { rank: res.rank, id: res.entry.id, total: res.total }
-    if (res.rank <= 10) game.award('podium', [])
-  } catch (e) {
-    sendError.value = e?.data?.statusMessage || 'Envoi impossible. Vérifiez la connexion et réessayez.'
-  } finally {
-    sending.value = false
-  }
+  const r = result.value
+  state.value.saved = leaderboard.add({ name: n, plant: state.value.chosen, kwh: r.kwh, time: r.time, errors: r.errors })
+  name.value = n
+  play('lock')
 }
-
-const shareData = computed(() => ({
-  name: state.value.name, ...totals.value, badges: Object.keys(state.value.badges), rank: state.value.submitted?.rank,
-}))
+const meEntry = computed(() => state.value.saved && result.value
+  ? { rank: state.value.saved.rank, name: name.value, kwh: result.value.kwh, time: result.value.time, plantName: chosen.value?.name }
+  : null)
+function newGame () { game.reset() }
 
 // ---------- Panneaux
 const showBoard = ref(false)
-const showBadges = ref(false)
-const confirmReset = ref(false)
-function resetGame () { game.reset(); confirmReset.value = false; showFinal.value = false }
-const earned = computed(() => Object.keys(state.value.badges).length)
-const meEntry = computed(() => state.value.submitted
-  ? { rank: state.value.submitted.rank, name: state.value.name, ...totals.value }
-  : null)
+
+// ---------- Accès du personnel : 5 touchers rapides sur le logo, puis code
+const showStaff = ref(false)
+let taps = []
+function onLogo () {
+  const now = Date.now()
+  taps = [...taps.filter(t => now - t < KIOSK.staffTapWindow), now]
+  if (taps.length >= KIOSK.staffTaps) { taps = []; showStaff.value = true }
+}
 </script>
 
 <template>
   <div class="page">
     <header class="top">
       <div class="brand">
-        <img src="/brand/ciprel.png" width="337" height="150" class="logo" alt="CIPREL, Compagnie Ivoirienne de Production d'Électricité">
-        <h1>Allumez la centrale du futur</h1>
+        <img src="/brand/ciprel.png" width="337" height="150" class="logo" alt="CIPREL, Compagnie Ivoirienne de Production d'Électricité" draggable="false" @click="onLogo">
+        <h1>{{ finale ? 'Abidjan est allumée !' : 'Choisissez votre centrale' }}</h1>
       </div>
       <nav class="tools" aria-label="Partie">
         <SoundToggle />
-        <button class="btn ghost" type="button" @click="showBadges = true">
-          <AppIcon name="medal" :size="18" /><span class="lbl">Récompenses</span> <span class="count">{{ earned }}/{{ BADGES.length }}</span>
-        </button>
         <button class="btn ghost" type="button" @click="showBoard = true">
           <AppIcon name="trophy" :size="18" /><span class="lbl">Classement</span>
         </button>
       </nav>
     </header>
 
-    <section class="hud" aria-label="Votre partie">
-      <div class="meter">
-        <p class="meter-label">Production</p>
-        <p class="meter-value"><AppIcon name="bolt" :size="22" />{{ formatKwh(totals.kwh) }}</p>
-      </div>
-      <div class="progress" role="progressbar" :aria-valuenow="solvedCount" aria-valuemin="0" aria-valuemax="5" :aria-label="`${solvedCount} centrales sur 5 allumées`">
-        <span v-for="p in PLANTS" :key="p.id" class="seg" :class="{ on: solvedMap[p.id] }" :style="{ '--c': p.color }" />
-        <span class="progress-text">{{ solvedCount }}/5 centrales</span>
-      </div>
-      <span class="chip"><AppIcon name="clock" :size="18" />{{ formatTime(totals.time) }}</span>
-      <span class="chip" :title="'Jetons coup de pouce'"><AppIcon name="bulb" :size="18" />{{ state.hints }}<span class="sr-only"> coup(s) de pouce</span></span>
+    <section class="hud" aria-label="Règles">
+      <template v-if="!finale">
+        <span class="chip"><AppIcon name="grid" :size="18" />1 centrale à choisir parmi 5</span>
+        <span class="chip"><AppIcon name="check" :size="18" />6 pièces à assembler</span>
+        <span class="chip"><AppIcon name="clock" :size="18" />{{ formatTime(RULES.duration) }} chrono</span>
+      </template>
+      <template v-else-if="result">
+        <span class="chip plant-chip" :style="{ '--c': chosen?.color }"><span class="dot" aria-hidden="true" />{{ chosen?.name }}</span>
+        <span class="meter-value"><AppIcon name="bolt" :size="22" />{{ formatKwh(result.kwh) }}</span>
+        <StarRating :value="result.stars" :size="22" />
+        <span class="chip"><AppIcon name="clock" :size="18" />{{ formatTime(result.time) }}</span>
+      </template>
     </section>
 
     <main class="main">
       <div class="stack">
-        <ClientOnly>
-          <OverviewScene :solved="solvedMap" :reveal="reveal" :celebrate="celebrate" @open="open" @revealed="onRevealed" @energized="onEnergized">
-            <!-- techniciens CIPREL : l'un parcourt la route, l'autre fête la dernière centrale allumée -->
-            <g class="walker" aria-hidden="true">
-              <g transform="translate(0 688)"><CiprelTechnician variant="homme" pose="walk" :size="112" /></g>
-            </g>
-            <g v-if="lastSolved" class="greeter" :transform="`translate(${GREET[lastSolved]} 668)`" aria-hidden="true">
-              <CiprelTechnician variant="femme" :pose="celebrate ? 'cheer' : 'wave'" :size="104" />
-            </g>
-          </OverviewScene>
-          <template #fallback><div class="scene-ph" /></template>
-        </ClientOnly>
+        <OverviewScene
+          :chosen="state.chosen"
+          :interactive="!finale"
+          :play="finale"
+          :celebrate="celebrate"
+          @open="ask"
+          @revealed="onRevealed"
+          @energized="onEnergized"
+        >
+          <!-- techniciens CIPREL en tenue : ils parcourent la route ; l'un fête la centrale choisie -->
+          <g aria-hidden="true">
+            <g class="walker w1"><g transform="translate(0 688)"><CiprelTechnician variant="homme" pose="walk" :size="112" /></g></g>
+            <g class="walker w2"><g transform="translate(0 694) scale(-1 1)"><CiprelTechnician variant="femme" pose="walk" :size="104" /></g></g>
+            <g class="walker w3"><g transform="translate(0 700)"><CiprelTechnician variant="homme" pose="walk" :size="98" /></g></g>
+          </g>
+          <g v-if="finale && chosen" class="greeter" :transform="`translate(${GREET[chosen.id]} 668)`" aria-hidden="true">
+            <CiprelTechnician variant="femme" :pose="energized ? 'cheer' : 'wave'" :size="104" />
+          </g>
+        </OverviewScene>
         <div ref="cityEl" class="city">
-          <AbidjanSkyline :level="cityLevel" :celebrate="allSolved && cityLevel >= 5" />
+          <AbidjanSkyline :level="cityLevel" :celebrate="celebrate" />
           <p class="city-tag">
             <AppIcon name="bolt" :size="18" />
-            {{ cityLevel >= 5 ? 'Abidjan est entièrement alimentée' : `Abidjan alimentée à ${cityLevel * 20} %` }}
+            {{ cityLevel >= 5 ? `Abidjan alimentée à 100 % par la centrale ${chosen?.name}` : 'Abidjan attend son électricité' }}
           </p>
         </div>
       </div>
 
       <aside class="side">
-        <ClientOnly>
-          <GuideBubble :text="guideText" variant="homme" :pose="allSolved ? 'cheer' : solvedCount ? 'point' : 'wave'" side="left" :size="104" />
-        </ClientOnly>
+        <GuideBubble :text="guideText" variant="homme" :pose="finale ? (energized ? 'cheer' : 'point') : 'wave'" side="left" :size="104" />
 
-        <ul class="plants">
-          <li v-for="p in PLANTS" :key="p.id" :style="{ '--c': p.color }" :class="{ on: solvedMap[p.id] }">
-            <button type="button" class="plant-btn" @click="open(p.id)">
+        <ul v-if="!finale" class="plants">
+          <li v-for="p in PLANTS" :key="p.id" :style="{ '--c': p.color }">
+            <button type="button" class="plant-btn" @click="ask(p.id)">
               <span class="dot" aria-hidden="true" />
               <span class="plant-name">{{ p.name }}</span>
-              <StarRating v-if="solvedMap[p.id]" :value="state.plants[p.id].stars" :size="16" />
-              <span v-else class="todo">À assembler</span>
-              <span v-if="solvedMap[p.id]" class="plant-kwh">{{ formatKwh(state.plants[p.id].kwh) }}</span>
+              <span class="todo">Assembler</span>
             </button>
           </li>
         </ul>
-
-        <div v-if="allSolved" class="side-actions">
-          <button class="btn" type="button" @click="showFinal = true"><AppIcon name="trophy" :size="18" />Bilan de la partie</button>
+        <div v-else class="side-actions">
+          <button v-if="!showFinal && energized" class="btn" type="button" @click="showFinal = true"><AppIcon name="trophy" :size="18" />Mon score</button>
+          <button class="btn ghost" type="button" @click="newGame"><AppIcon name="refresh" :size="18" />Nouvelle partie</button>
         </div>
-        <button v-if="solvedCount" class="linkish" type="button" @click="confirmReset = true">Recommencer depuis le début</button>
       </aside>
     </main>
 
-    <!-- bilan final -->
-    <AppDialog :open="showFinal" title="La centrale du futur est allumée !" wide @close="showFinal = false">
-      <div class="final">
-        <div class="final-score">
-          <p class="big"><AppIcon name="bolt" :size="28" />{{ formatKwh(totals.kwh) }}</p>
-          <p class="muted">{{ formatTime(totals.time) }} · {{ totals.errors }} erreur{{ totals.errors > 1 ? 's' : '' }} · {{ earned }} récompense{{ earned > 1 ? 's' : '' }}</p>
+    <!-- confirmation du choix : une seule centrale par partie -->
+    <AppDialog :open="!!pending" :title="pending ? `Assembler la centrale ${pending.name} ?` : ''" @close="pending = null">
+      <div v-if="pending" class="confirm">
+        <p>Vous aurez <strong>{{ formatTime(RULES.duration) }}</strong> pour remettre ses 6 pièces en place. Réussissez, et votre centrale alimentera tout Abidjan.</p>
+        <div class="actions">
+          <button class="btn ghost" type="button" @click="pending = null">Changer</button>
+          <button class="btn" type="button" @click="start">C’est parti !</button>
         </div>
-        <form v-if="!state.submitted" class="submit" @submit.prevent="submit">
+      </div>
+    </AppDialog>
+
+    <!-- bilan final -->
+    <AppDialog :open="showFinal && !!result" :title="chosen ? `Centrale ${chosen.name} : Abidjan alimentée à 100 % !` : 'Bilan'" wide @close="showFinal = false">
+      <div v-if="result" class="final">
+        <div class="final-score">
+          <p class="big"><AppIcon name="bolt" :size="28" />{{ formatKwh(result.kwh) }}</p>
+          <StarRating :value="result.stars" :size="28" />
+          <p class="muted">Assemblée en {{ formatTime(result.time) }} · {{ formatTime(result.left) }} restantes</p>
+        </div>
+        <form v-if="!state.saved" class="submit" @submit.prevent="save">
           <label for="pseudo">Votre pseudo pour le classement</label>
           <div class="row">
-            <input id="pseudo" v-model="name" maxlength="20" autocomplete="nickname" placeholder="Ex. Alex" required>
-            <button class="btn" type="submit" :disabled="sending">{{ sending ? 'Envoi…' : 'Enregistrer mon score' }}</button>
+            <input id="pseudo" :value="name" readonly inputmode="none" maxlength="20" placeholder="Touchez les lettres ci-dessous" aria-describedby="pseudo-help">
+            <button class="btn" type="submit">Enregistrer</button>
           </div>
+          <p id="pseudo-help" class="sr-only">Saisissez votre pseudo avec le clavier affiché.</p>
           <p v-if="sendError" class="err" role="alert">{{ sendError }}</p>
+          <TouchKeyboard v-model="name" :maxlength="20" submit-label="Enregistrer" @submit="save" />
         </form>
-        <p v-else class="ranked" role="status">
-          <AppIcon name="medal" :size="20" />
-          {{ state.submitted.rank === 1 ? 'Meilleur score' : `${state.submitted.rank}ᵉ place` }} sur {{ state.submitted.total }} partie{{ state.submitted.total > 1 ? 's' : '' }}
-        </p>
-        <LeaderboardPanel v-if="state.submitted" :highlight="state.submitted.id" :me="meEntry" />
-        <ShareSouvenir v-if="showFinal" :data="shareData" @shared="game.award('souvenir', [])" />
+        <template v-else>
+          <p class="ranked" role="status">
+            <AppIcon name="medal" :size="20" />
+            {{ state.saved.rank === 1 ? 'Meilleur score' : `${state.saved.rank}ᵉ place` }} sur {{ state.saved.total }} partie{{ state.saved.total > 1 ? 's' : '' }}
+          </p>
+          <LeaderboardPanel :highlight="state.saved.id" :me="meEntry" :limit="10" />
+        </template>
         <div class="actions">
-          <button class="btn ghost" type="button" @click="confirmReset = true"><AppIcon name="refresh" :size="18" />Rejouer</button>
+          <button class="btn" :class="{ ghost: !state.saved }" type="button" @click="newGame"><AppIcon name="refresh" :size="18" />Nouvelle partie</button>
         </div>
       </div>
     </AppDialog>
 
     <AppDialog :open="showBoard" title="Classement" @close="showBoard = false">
-      <LeaderboardPanel v-if="showBoard" :highlight="state.submitted?.id" :me="meEntry" />
+      <LeaderboardPanel v-if="showBoard" :highlight="state.saved?.id" :me="meEntry" />
     </AppDialog>
 
-    <AppDialog :open="showBadges" title="Récompenses" wide @close="showBadges = false">
-      <ul class="badges">
-        <li v-for="b in BADGES" :key="b.id" :class="{ earned: state.badges[b.id] }">
-          <BadgeIcon :id="b.id" :earned="!!state.badges[b.id]" :size="46" />
-          <div>
-            <strong>{{ b.name }}</strong>
-            <span>{{ b.desc }}</span>
-          </div>
-          <span class="sr-only">{{ state.badges[b.id] ? 'obtenue' : 'à débloquer' }}</span>
-        </li>
-      </ul>
-    </AppDialog>
-
-    <AppDialog :open="confirmReset" title="Recommencer une partie ?" @close="confirmReset = false">
-      <p>Votre progression, vos kWh et vos récompenses repartiront de zéro. Les scores déjà enregistrés restent au classement.</p>
-      <div class="actions">
-        <button class="btn ghost" type="button" @click="confirmReset = false">Annuler</button>
-        <button class="btn" type="button" @click="resetGame">Recommencer</button>
-      </div>
-    </AppDialog>
+    <StaffPanel :open="showStaff" @close="showStaff = false" />
   </div>
 </template>
 
@@ -235,42 +229,39 @@ const meEntry = computed(() => state.value.submitted
 .brand { display: flex; align-items: center; gap: 14px; min-width: 0; }
 .logo { height: 56px; width: auto; border-radius: 12px; background: #fff; padding: 4px 8px; box-shadow: var(--shadow); flex: none; }
 .brand h1 { font-size: clamp(1.5rem, 4.2vw, 2.6rem); font-weight: 800; color: var(--navy); }
-.linkish { justify-self: start; border: 0; background: none; padding: 6px 2px; color: var(--ink-2); font-weight: 700; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
-.linkish:hover { color: var(--ink); }
 .tools { display: flex; gap: 8px; flex-wrap: wrap; }
-.count { font-variant-numeric: tabular-nums; color: var(--ink-2); font-weight: 500; }
 @media (max-width: 560px) {
   .page { padding: 12px 16px 24px; gap: 12px; }
   .top { align-items: center; flex-wrap: wrap; row-gap: 10px; }
   .brand { display: contents; }
   .logo { height: 44px; padding: 3px 6px; order: 1; }
-  .tools { order: 2; margin-left: auto; }
+  .tools { order: 2; margin-left: auto; flex-wrap: nowrap; flex: none; gap: 6px; }
   .brand h1 { order: 3; flex: 1 1 100%; font-size: 1.7rem; }
   .tools .lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
-  .tools { flex-wrap: nowrap; flex: none; gap: 6px; }
   .tools .btn { padding: .55rem .8rem; }
-  .hud { gap: 8px 10px; }
-  .progress { order: 3; flex-basis: 100%; }
 }
 
 .hud { display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap; background: var(--surface); border-radius: var(--radius-lg); padding: 12px 18px; box-shadow: var(--shadow); }
-.meter { display: grid; margin-right: 6px; }
-.meter-label { font-size: .75rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-2); }
 .meter-value { display: flex; align-items: center; gap: 6px; font-family: var(--font-display); font-size: 1.7rem; line-height: 1.1; font-weight: 800; color: var(--energy-ink); font-variant-numeric: tabular-nums; }
-.progress { flex: 1; min-width: 200px; display: flex; align-items: center; gap: 4px; }
-.seg { flex: 1; height: 14px; border-radius: 99px; background: #e1e9ef; border: 2px solid var(--ink); transition: background .6s; }
-.seg.on { background: var(--c); }
-.progress-text { margin-left: 8px; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.plant-chip .dot { width: 14px; height: 14px; border-radius: 50%; background: var(--c); border: 2px solid var(--ink); }
 
 .main { display: grid; gap: 16px; grid-template-columns: 1fr; align-items: start; }
 @media (min-width: 1024px) { .main { grid-template-columns: minmax(0, 1fr) 300px; } }
-.scene-ph { aspect-ratio: 4 / 3; background: #d8eef6; }
 .stack { border-radius: var(--radius-lg); overflow: hidden; box-shadow: var(--shadow); background: #26456f; }
 .stack :deep(.art) { border-radius: 0; box-shadow: none; }
 .city { position: relative; }
-.stack :deep(.walker) { animation: walk-across 38s linear infinite; }
-@keyframes walk-across { from { transform: translateX(-80px); } to { transform: translateX(1280px); } }
-@media (prefers-reduced-motion: reduce) { .stack :deep(.walker) { animation: none; transform: translateX(560px); } }
+/* trois techniciens parcourent la route, chacun à son pas */
+.stack :deep(.walker) { animation: walk-right 38s linear infinite; }
+.stack :deep(.walker.w2) { animation: walk-left 46s linear infinite; animation-delay: -18s; }
+.stack :deep(.walker.w3) { animation-duration: 54s; animation-delay: -31s; }
+@keyframes walk-right { from { transform: translateX(-80px); } to { transform: translateX(1280px); } }
+@keyframes walk-left { from { transform: translateX(1280px); } to { transform: translateX(-80px); } }
+/* sur la borne (classe kiosk), le final reste animé même si Windows réduit les animations */
+@media (prefers-reduced-motion: reduce) {
+  html:not(.kiosk) .stack :deep(.walker) { animation: none; transform: translateX(560px); }
+  html:not(.kiosk) .stack :deep(.walker.w2) { transform: translateX(160px); }
+  html:not(.kiosk) .stack :deep(.walker.w3) { transform: translateX(980px); }
+}
 .city-tag {
   position: absolute; left: 12px; top: 10px; display: inline-flex; align-items: center; gap: 6px;
   padding: 4px 12px; border-radius: 999px; background: rgba(255, 255, 255, .92); border: 2px solid var(--ink);
@@ -278,37 +269,31 @@ const meEntry = computed(() => state.value.submitted
 }
 
 .side { display: grid; gap: 14px; }
-.plants { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.plants { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .plant-btn {
-  width: 100%; min-height: 54px; display: flex; align-items: center; gap: 10px;
-  padding: 8px 16px; border: 2px solid var(--line); border-radius: 999px; background: var(--surface);
-  cursor: pointer; text-align: left; transition: border-color .15s, background .15s;
+  width: 100%; min-height: 60px; display: flex; align-items: center; gap: 12px;
+  padding: 8px 18px; border: 3px solid var(--c); border-radius: 999px; background: var(--surface);
+  cursor: pointer; text-align: left; transition: background .15s;
 }
-.plant-btn:hover { border-color: var(--c); background: #f7f9fb; }
-.dot { width: 14px; height: 14px; border-radius: 50%; border: 3px solid var(--c); background: transparent; flex: none; }
-.on .dot { background: var(--c); }
-.plant-name { font-family: var(--font-display); font-weight: 700; font-size: 1.1rem; flex: 1; }
-.todo { color: var(--ink-2); font-size: .88rem; }
-.plant-kwh { font-variant-numeric: tabular-nums; font-size: .88rem; color: var(--ink-2); }
+.plant-btn:hover, .plant-btn:active { background: #fff3d1; }
+.dot { width: 16px; height: 16px; border-radius: 50%; border: 3px solid var(--c); background: var(--c); flex: none; }
+.plant-name { font-family: var(--font-display); font-weight: 700; font-size: 1.2rem; flex: 1; }
+.todo { font-family: var(--font-display); font-weight: 700; color: var(--orange-ink); }
 .side-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
-.final { display: grid; gap: 16px; }
+.confirm { display: grid; gap: 16px; font-size: 1.05rem; }
+.final { display: grid; gap: 14px; }
+.final-score { display: flex; align-items: center; gap: 8px 16px; flex-wrap: wrap; }
 .final-score .big { display: flex; align-items: center; gap: 8px; font-family: var(--font-display); font-size: clamp(2rem, 6vw, 2.8rem); font-weight: 800; color: var(--energy-ink); font-variant-numeric: tabular-nums; }
-.muted { color: var(--ink-2); }
-.submit { display: grid; gap: 6px; }
-.submit label { font-weight: 600; }
+.muted { color: var(--ink-2); flex-basis: 100%; }
+.submit { display: grid; gap: 8px; }
+.submit label { font-weight: 700; }
 .submit .row { display: flex; gap: 8px; flex-wrap: wrap; }
-.submit input { flex: 1; min-width: 180px; min-height: 44px; padding: 0 14px; border-radius: 12px; border: 2px solid var(--line); font: inherit; }
-.submit input:focus-visible { border-color: var(--navy); outline: 3px solid rgba(38, 69, 111, .25); outline-offset: 0; }
-.err { color: var(--bad); font-weight: 600; }
+.submit input {
+  flex: 1; min-width: 180px; min-height: 52px; padding: 0 14px; border-radius: 12px; border: 2px solid var(--line);
+  font: inherit; font-family: var(--font-display); font-weight: 700; font-size: 1.3rem; caret-color: transparent;
+}
+.err { color: var(--bad); font-weight: 700; }
 .ranked { display: flex; align-items: center; gap: 8px; font-weight: 700; color: var(--navy); }
 .actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
-
-.badges { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
-@media (min-width: 640px) { .badges { grid-template-columns: 1fr 1fr; } }
-.badges li { display: flex; gap: 12px; align-items: center; padding: 8px; border-radius: 12px; }
-.badges li.earned { background: #f6f9f4; }
-.badges li div { display: grid; }
-.badges span { color: var(--ink-2); font-size: .9rem; }
-.badges li:not(.earned) strong { color: var(--ink-2); }
 </style>

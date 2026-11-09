@@ -3,43 +3,41 @@ import { formatTime, formatKwh } from '~/composables/useGame'
 
 const props = defineProps({
   highlight: { type: String, default: null },
-  me: { type: Object, default: null }, // { rank, name, kwh, time, errors } si hors du top affiché
+  me: { type: Object, default: null }, // { rank, name, kwh, time, plantName } si hors du top affiché
+  limit: { type: Number, default: 20 },
 })
-const meOutside = computed(() => props.me && data.value?.entries && !data.value.entries.some(e => e.id === props.highlight))
-const { data, pending, error, refresh } = await useFetch('/api/scores', { query: { limit: 20 }, server: false, lazy: true })
-defineExpose({ refresh })
+const { entries } = useLeaderboard()
+const top = computed(() => entries.value.slice(0, props.limit))
+const meOutside = computed(() => props.me && !top.value.some(e => e.id === props.highlight))
 const medal = r => (r === 1 ? 'or' : r === 2 ? 'argent' : r === 3 ? 'bronze' : null)
 </script>
 
 <template>
   <div class="board">
-    <p v-if="pending" class="state">Chargement du classement…</p>
-    <p v-else-if="error" class="state">Classement indisponible pour le moment. <button class="btn ghost" type="button" @click="refresh()">Réessayer</button></p>
-    <p v-else-if="!data?.entries.length" class="state">Aucune partie enregistrée : soyez le premier ou la première !</p>
+    <p v-if="!top.length" class="state">Aucune partie enregistrée : soyez le premier ou la première !</p>
     <ol v-else class="list">
-      <li v-for="e in data.entries" :key="e.id" :class="{ me: e.id === props.highlight }">
+      <li v-for="e in top" :key="e.id" :class="{ me: e.id === props.highlight }">
         <span class="rank" :class="medal(e.rank)">
           <span class="sr-only">Rang </span>{{ e.rank }}
         </span>
         <span class="name">
-          {{ e.name }}
-          <span v-if="e.perfect" class="tag">Mix parfait</span>
+          {{ e.name }}<template v-if="e.id === props.highlight"> (vous)</template>
         </span>
         <span class="kwh">{{ formatKwh(e.kwh) }}</span>
-        <span class="meta">{{ formatTime(e.time) }} · {{ e.errors }} err.</span>
+        <span class="meta">{{ e.plantName }} · {{ formatTime(e.time) }}</span>
       </li>
       <li v-if="meOutside" class="me gap">
         <span class="rank"><span class="sr-only">Rang </span>{{ me.rank }}</span>
         <span class="name">{{ me.name }} (vous)</span>
         <span class="kwh">{{ formatKwh(me.kwh) }}</span>
-        <span class="meta">{{ formatTime(me.time) }} · {{ me.errors }} err.</span>
+        <span class="meta">{{ me.plantName }} · {{ formatTime(me.time) }}</span>
       </li>
     </ol>
   </div>
 </template>
 
 <style scoped>
-.state { color: var(--ink-2); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.state { color: var(--ink-2); }
 .list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; max-height: min(60dvh, 520px); overflow: auto; }
 .list li {
   display: grid; grid-template-columns: 40px 1fr auto; grid-template-areas: "rank name kwh" "rank meta meta";
@@ -52,7 +50,6 @@ const medal = r => (r === 1 ? 'or' : r === 2 ? 'argent' : r === 3 ? 'bronze' : n
 .rank.argent { background: #cfd6dd; }
 .rank.bronze { background: #e0ae84; }
 .name { grid-area: name; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tag { margin-left: 6px; font-size: .72rem; font-weight: 700; color: var(--energy-ink); background: #fff3cc; border-radius: 999px; padding: 2px 8px; vertical-align: middle; }
 .kwh { grid-area: kwh; font-family: var(--font-display); font-weight: 800; font-variant-numeric: tabular-nums; }
 .meta { grid-area: meta; color: var(--ink-2); font-size: .85rem; font-variant-numeric: tabular-nums; }
 </style>

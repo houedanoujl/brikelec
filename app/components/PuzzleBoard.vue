@@ -8,6 +8,8 @@ import { FLOW_TYPES } from '~/data/plants'
 const props = defineProps({
   plant: { type: Object, required: true },
   solved: { type: Boolean, default: false },
+  // temps écoulé : plus aucune pièce ne bouge, celle qui est tenue repart à sa place
+  disabled: { type: Boolean, default: false },
 })
 const emit = defineEmits(['validate', 'complete', 'announce', 'first-move', 'pick', 'progress'])
 
@@ -152,7 +154,7 @@ function toSvg (e) {
 }
 
 function onDown (e, p) {
-  if (p.locked || checking.value || e.button > 0) return
+  if (props.disabled || p.locked || checking.value || e.button > 0) return
   e.preventDefault()
   const q = toSvg(e)
   // prise dans le bac : la pièce reprend sa taille réelle, centrée sous le doigt ;
@@ -216,7 +218,7 @@ function drop (p, k) {
 // ---------- Vérification : seulement quand les 6 cases sont remplies
 const checking = ref(false)
 function validate () {
-  if (!filled.value || checking.value) return
+  if (props.disabled || !filled.value || checking.value) return
   const wrong = pieces.value.filter(p => !p.locked && p.cell !== p.idx)
   pieces.value.forEach(p => { if (p.cell === p.idx) p.locked = true })
   if (!wrong.length) {
@@ -237,28 +239,26 @@ function validate () {
   }, 700)
 }
 
-// ---------- Coup de pouce : une pièce rejoint sa case et s'y verrouille
-function hint () {
-  const p = pieces.value.find(q => !q.locked && q.cell !== q.idx) || pieces.value.find(q => !q.locked)
-  if (!p) return false
-  const other = occupant(p.idx)
-  if (other && other !== p) toTray(other)
-  p.cell = p.idx
-  p.locked = true
-  p.z = ++zTop.value
-  home(p)
-  emit('announce', `Coup de pouce : ${p.label} est en case ${p.idx + 1}.`)
-  if (filled.value) setTimeout(validate, 380)
-  return true
-}
-defineExpose({ hint })
+// ---------- Temps écoulé : on lâche la pièce tenue et on fige le plateau
+watch(() => props.disabled, (off) => {
+  if (!off) return
+  if (drag) {
+    const { p, id, el } = drag
+    drag = null
+    try { el?.releasePointerCapture?.(id) } catch { /* déjà relâchée */ }
+    p.state = 'idle'
+    home(p)
+    emit('pick', null)
+  }
+  selected.value = null
+})
 
 // ---------- Clavier : Entrée pour prendre, flèches pour viser, Entrée pour poser
 const selected = ref(null)
 const cursor = ref(0)
 function cancelSelection () { selected.value = null }
 function onKey (e, p) {
-  if (p.locked || checking.value) return
+  if (props.disabled || p.locked || checking.value) return
   if (e.key === 'Enter' || e.key === ' ') {
     e.preventDefault()
     if (selected.value === p) {
@@ -313,7 +313,7 @@ const fullArt = computed(() => inner(props.plant.id))
 </script>
 
 <template>
-  <div ref="wrap" class="board-wrap" :class="{ settling: !settled }">
+  <div ref="wrap" class="board-wrap" :class="{ settling: !settled, frozen: disabled }">
     <svg
       ref="svgEl"
       class="board"
@@ -418,7 +418,8 @@ const fullArt = computed(() => inner(props.plant.id))
 .piece { cursor: grab; transition: transform .32s cubic-bezier(.2, .8, .2, 1); outline: none; }
 .piece.is-drag { cursor: grabbing; transition: none; }
 .settling .piece { transition: none; }
-.piece.is-locked { cursor: default; }
+.piece.is-locked, .frozen .piece { cursor: default; }
+.frozen .board { opacity: .6; transition: opacity .4s; }
 .piece-label { pointer-events: none; }
 .piece.is-locked .cut, .piece.is-locked .cut-halo { opacity: 0; transition: opacity .3s; }
 .cut-halo { stroke: #fff; }
@@ -445,8 +446,9 @@ const fullArt = computed(() => inner(props.plant.id))
   80% { transform: translateX(5px); }
 }
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+/* sur la borne (classe kiosk), le final reste animé même si Windows réduit les animations */
 @media (prefers-reduced-motion: reduce) {
-  .piece { transition: none; }
-  .piece.is-wrong .piece-inner, .final, .final.flowing :deep(.flux) { animation: none; }
+  html:not(.kiosk) .piece { transition: none; }
+  html:not(.kiosk) .piece.is-wrong .piece-inner, html:not(.kiosk) .final, html:not(.kiosk) .final.flowing :deep(.flux) { animation: none; }
 }
 </style>
