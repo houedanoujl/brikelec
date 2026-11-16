@@ -1,6 +1,6 @@
 <script setup>
-// Accès du personnel (5 touchers sur le logo) : code, puis effacer le classement
-// ou quitter l'application de la borne.
+// Accès du personnel (bouton « Quitter » de l'accueil, ou 5 touchers sur le logo) :
+// code, puis effacer le classement ou quitter l'application de la borne.
 import { KIOSK } from '~/utils/kiosk'
 
 const props = defineProps({ open: { type: Boolean, default: false } })

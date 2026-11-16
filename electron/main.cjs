@@ -10,7 +10,7 @@
 //   normalement, F11 pour le plein écran, pas de lancement automatique. Pour essayer
 //   le jeu sur un PC de bureau.
 // Lancement : npm run kiosk:dev (ajouter -- --test pour une fenêtre normale)
-// Quitter : Ctrl+Maj+Q, ou l'espace personnel (5 touchers sur le logo CIPREL).
+// Quitter : bouton « Quitter » de l'accueil (code du personnel), ou Ctrl+Maj+Q.
 const { app, BrowserWindow, protocol, session, powerSaveBlocker, ipcMain } = require('electron')
 const path = require('node:path')
 const fs = require('node:fs')

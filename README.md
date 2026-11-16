@@ -64,7 +64,7 @@ Les textes sont convertis en tracés parce que Trebuchet MS n'existe pas sur And
   - le réglage Windows « réduire les animations » est ignoré, pour garder le final : le preload expose `window.kiosk`, la page pose la classe `kiosk` sur `<html>`, ce qui neutralise les règles `prefers-reduced-motion` et `useGsap().reduced`.
 - **Classement** : seule donnée conservée, dans le localStorage de l'application (`%APPDATA%\La centrale du futur\Local Storage`, clé `centrale-du-futur:classement:v1`, 200 parties au plus). Il survit aux redémarrages. La partie en cours, elle, reste en mémoire : rien ne passe d'un joueur au suivant.
 - **Inactivité** : après 60 s sans contact (accueil, bilan, conseils, échec), la partie est remise à zéro et l'accueil s'affiche. Le minuteur est suspendu pendant le compte à rebours et pendant l'animation finale.
-- **Personnel** : 5 touchers rapides sur le logo CIPREL ouvrent l'espace personnel, qui permet d'effacer le classement et de quitter l'application.
+- **Personnel** : sur l'accueil, le bouton « Quitter » (pictogramme marche/arrêt, en haut à droite) ouvre l'espace personnel, qui permet d'effacer le classement et de quitter l'application, sans clavier. 5 touchers rapides sur le logo CIPREL l'ouvrent aussi.
   - Le code est vérifié par l'application (`electron/main.cjs`), jamais par la page. Par défaut `2026` ; **à changer sur chaque borne** dans `%APPDATA%\La centrale du futur\borne.json` : `{ "pin": "4 à 8 chiffres" }`.
   - Trois erreurs bloquent l'accès 60 s. Quitter n'est possible que dans les 5 minutes qui suivent un code juste.
   - Avec un clavier branché, `Ctrl+Maj+Q` quitte aussi. Alt+F4 ne ferme pas la borne.

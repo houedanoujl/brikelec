@@ -6,7 +6,7 @@
 import { PLANTS, PLANT_BY_ID } from '~/data/plants'
 import { RULES, formatTime, formatKwh } from '~/composables/useGame'
 import { cleanName } from '~/composables/useLeaderboard'
-import { KIOSK, prefersReducedMotion } from '~/utils/kiosk'
+import { KIOSK, onKiosk, prefersReducedMotion } from '~/utils/kiosk'
 
 const game = useGame()
 const { state } = game
@@ -85,8 +85,10 @@ function newGame () { game.reset() }
 // ---------- Panneaux
 const showBoard = ref(false)
 
-// ---------- Accès du personnel : 5 touchers rapides sur le logo, puis code
+// ---------- Accès du personnel : bouton « Quitter » de la borne (ou 5 touchers
+// rapides sur le logo), puis code
 const showStaff = ref(false)
+const kioskApp = onKiosk()
 let taps = []
 function onLogo () {
   const now = Date.now()
@@ -106,6 +108,10 @@ function onLogo () {
         <SoundToggle />
         <button class="btn ghost" type="button" @click="showBoard = true">
           <AppIcon name="trophy" :size="18" /><span class="lbl">Classement</span>
+        </button>
+        <!-- borne sans clavier : quitter au toucher, après le code du personnel -->
+        <button v-if="kioskApp" class="btn ghost icon" type="button" aria-label="Quitter l’application (personnel)" title="Quitter l’application (personnel)" @click="showStaff = true">
+          <AppIcon name="power" :size="20" />
         </button>
       </nav>
     </header>

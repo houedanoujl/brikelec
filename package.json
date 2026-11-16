@@ -1,7 +1,7 @@
 {
   "name": "brikelec-puzzle",
   "productName": "La centrale du futur",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "La centrale du futur : jeu de puzzle CIPREL pour borne tactile hors ligne.",
   "author": "CIPREL",
   "type": "module",
