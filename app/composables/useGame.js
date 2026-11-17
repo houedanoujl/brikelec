@@ -31,13 +31,13 @@ export function useGame () {
     state.value = { ...fresh(), phase: 'puzzle', chosen: id }
   }
 
-  // Assemblage réussi : 1000 kWh + 10 kWh par seconde restante.
-  function win ({ time, errors }) {
+  // Bilan d'un assemblage réussi : 1000 kWh + 10 kWh par seconde restante.
+  function tally (time, errors) {
     // secondes entières : temps + temps restant = 2:00, comme sur le compte à rebours
     const t = Math.min(RULES.duration, Math.max(0, Math.floor(time)))
     const left = RULES.duration - t
     const bonus = left * RULES.perSecondLeft
-    state.value.result = {
+    return {
       time: t,
       errors,
       left,
@@ -48,8 +48,19 @@ export function useGame () {
         { label: `Temps restant ${formatTime(left)} × ${RULES.perSecondLeft}`, value: bonus },
       ],
     }
+  }
+
+  function win ({ time, errors }) {
+    state.value.result = tally(time, errors)
     state.value.phase = 'won'
     return state.value.result
+  }
+
+  // Site web : le temps mesuré par le serveur fait foi pour le classement ;
+  // s'il diffère, le bilan affiché est aligné dessus.
+  function retime (time) {
+    const r = state.value.result
+    if (r && Number.isFinite(time) && time !== r.time) Object.assign(r, tally(time, r.errors))
   }
 
   function fail () {
@@ -69,7 +80,7 @@ export function useGame () {
     if (remount) round.value++
   }
 
-  return { state, round, choose, win, fail, toFinale, reset }
+  return { state, round, choose, win, retime, fail, toFinale, reset }
 }
 
 export const formatTime = (s) => {

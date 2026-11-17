@@ -1,7 +1,7 @@
 // Enregistre une partie du site web : une centrale assemblée en moins de 2 minutes.
-// Le score n'est pas envoyé par le navigateur : il est recalculé ici à partir
-// du temps (mêmes règles que RULES dans app/composables/useGame.js), puis
-// Supabase le recalcule à son tour dans submit_plant_score.
+// Le navigateur n'envoie ni score ni temps : seulement un pseudo et le jeton de
+// résultat signé par /api/games/finish (centrale, temps mesuré par le serveur,
+// erreurs). Chaque partie ne s'enregistre qu'une fois (identifiant du jeton).
 
 function cleanName (raw) {
   return String(raw ?? '')
@@ -17,14 +17,9 @@ export default defineEventHandler(async (event) => {
   const name = cleanName(body?.name)
   if (name.length < 2) throw createError({ statusCode: 400, statusMessage: 'Pseudo trop court (2 caractères minimum).' })
 
-  const plant = body?.plant
-  if (!PLANT_IDS.includes(plant)) throw createError({ statusCode: 400, statusMessage: 'Centrale inconnue.' })
+  const game = readToken(body?.ticket, 'r')
+  if (!game) throw createError({ statusCode: 400, statusMessage: 'Partie non vérifiée : score non enregistrable.' })
+  if (!(game.exp > Date.now())) throw createError({ statusCode: 400, statusMessage: 'Délai dépassé : rejouez pour enregistrer un score.' })
 
-  const time = Math.round(body?.time)
-  const errors = Math.round(body?.errors)
-  const ok = Number.isFinite(time) && Number.isFinite(errors) &&
-    time >= SCORE.minTime && time <= SCORE.duration && errors >= 0 && errors <= 500
-  if (!ok) throw createError({ statusCode: 400, statusMessage: 'Partie invalide.' })
-
-  return await saveScore({ name, plant, time, errors })
+  return await saveScore({ id: game.id, name, plant: game.plant, time: game.time, errors: game.errors })
 })

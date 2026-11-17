@@ -10,7 +10,9 @@ export const MAX_ENTRIES = 200
 export const PLANT_IDS = ['hydrogene', 'biomasse', 'cycle', 'solaire', 'eolien']
 
 // Mêmes règles que RULES dans app/composables/useGame.js
-export const SCORE = { duration: 120, base: 1000, perSecondLeft: 10, minTime: 3 }
+// minTime : en dessous, six pièces ne se posent pas à la main ; grace : marge réseau (s) ;
+// ticketMs : délai pour saisir son pseudo après le puzzle.
+export const SCORE = { duration: 120, base: 1000, perSecondLeft: 10, minTime: 8, grace: 3, ticketMs: 30 * 60_000 }
 export const kwhFor = time => SCORE.base + (SCORE.duration - time) * SCORE.perSecondLeft
 
 function supabase () {
@@ -59,28 +61,31 @@ export async function topScores (limit) {
   return { total: list.length, entries: list.slice(0, limit).map(publicEntry) }
 }
 
-// { name, plant, time, errors } déjà validés et arrondis par l'API ; renvoie { id, rank, total }
-export async function saveScore ({ name, plant, time, errors }) {
+// { id, name, plant, time, errors } issus du jeton de résultat ; renvoie { id, rank, total }.
+// id : identifiant de la partie, refusé s'il est déjà au classement.
+export async function saveScore ({ id, name, plant, time, errors }) {
   const sb = supabase()
   if (sb) {
     try {
       const r = await $fetch(`${sb.base}/rest/v1/rpc/submit_plant_score`, {
         method: 'POST',
         headers: sb.headers,
-        body: { p_name: name, p_plant: plant, p_time: time, p_errors: errors },
+        body: { p_game: id, p_name: name, p_plant: plant, p_time: time, p_errors: errors },
       })
       return { id: r.id, rank: r.rank, total: r.total }
     } catch (e) {
       // 400 : refus de submit_plant_score (message de validation, à afficher) ; sinon panne
+      // 409 : partie déjà enregistrée (game_id unique)
+      if (e?.statusCode === 409) throw createError({ statusCode: 409, statusMessage: 'Cette partie est déjà au classement.' })
       if (e?.statusCode === 400 && e?.data?.message) throw createError({ statusCode: 400, statusMessage: e.data.message })
       console.error('[classement] envoi Supabase impossible :', e?.data?.message || e?.message)
       throw createError({ statusCode: 502, statusMessage: 'Classement indisponible.' })
     }
   }
-  const { randomUUID } = await import('node:crypto')
-  const entry = { id: randomUUID(), name, plant, kwh: kwhFor(time), time, errors, at: Date.now() }
+  const entry = { id, name, plant, kwh: kwhFor(time), time, errors, at: Date.now() }
   const storage = useStorage('scores')
   const list = ((await storage.getItem(KEY)) || []).filter(e => e?.plant)
+  if (list.some(e => e.id === id)) throw createError({ statusCode: 409, statusMessage: 'Cette partie est déjà au classement.' })
   list.push(entry)
   list.sort(compare)
   const rank = list.findIndex(e => e.id === entry.id) + 1

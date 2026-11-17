@@ -3,6 +3,8 @@
 //   persistée. L'origine app://borne ne change jamais : le classement survit aux
 //   redémarrages (dossier de l'application, « Local Storage »). Aucun réseau.
 // - Site web : classement partagé, via /api/scores (Supabase, voir server/utils/scores.js).
+//   Le serveur chronomètre la partie : jeton de départ au lancement du chrono
+//   (begin), jeton de résultat à la fin du puzzle (finish), exigé pour enregistrer.
 import { PLANT_BY_ID } from '~/data/plants'
 import { onKiosk } from '~/utils/kiosk'
 
@@ -33,6 +35,10 @@ function write (list) {
   try { localStorage.setItem(KEY, JSON.stringify(list)) } catch { /* stockage indisponible : classement de la séance seulement */ }
 }
 
+// Site web : jetons de la partie en cours, { start, result } (promesses ; hors
+// état réactif, l'application est monopage et ne tourne que dans le navigateur).
+let ticket = {}
+
 const uid = () => (globalThis.crypto?.randomUUID?.() || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`)
 
 export function useLeaderboard () {
@@ -59,13 +65,38 @@ export function useLeaderboard () {
     }
   }
 
+  // Site web : le chrono du puzzle démarre. Sur la borne, rien à faire.
+  function begin (plant) {
+    if (!remote) return
+    ticket = {
+      start: $fetch('/api/games/start', { method: 'POST', body: { plant }, retry: 2 }).then(r => r.token).catch(() => null),
+    }
+  }
+
+  // Site web : puzzle réussi. Renvoie le temps retenu par le serveur (ou null).
+  async function finish ({ time, errors }) {
+    if (!remote) return null
+    const t = ticket
+    t.result = (async () => {
+      const token = await t.start
+      if (!token) return null
+      try {
+        return await $fetch('/api/games/finish', { method: 'POST', body: { token, time: Math.round(time), errors: Math.round(errors) || 0 }, retry: 2 })
+      } catch { return null }
+    })()
+    return (await t.result)?.time ?? null
+  }
+
   // entrée validée : { name, plant, kwh, time, errors } ; renvoie { id, rank, total }.
-  // Site web : le serveur recalcule les kWh ; une erreur réseau est levée à l'appelant.
+  // Site web : seuls le pseudo et le jeton de résultat partent au serveur ; une
+  // erreur (réseau, partie non vérifiée) est levée à l'appelant.
   async function add ({ name, plant, kwh, time, errors }) {
     if (remote) {
+      const res = await ticket.result
+      if (!res?.ticket) throw { data: { statusMessage: 'Partie non vérifiée par le serveur : score non enregistrable.' } }
       const saved = await $fetch('/api/scores', {
         method: 'POST',
-        body: { name: cleanName(name), plant, time: Math.round(time), errors: Math.round(errors) || 0 },
+        body: { name: cleanName(name), ticket: res.ticket },
       })
       refresh()
       return { id: saved.id, rank: saved.rank, total: saved.total }
@@ -86,5 +117,5 @@ export function useLeaderboard () {
     try { localStorage.removeItem(KEY) } catch { /* idem */ }
   }
 
-  return { entries: ranked, pending, error, remote, refresh, add, clear }
+  return { entries: ranked, pending, error, remote, refresh, begin, finish, add, clear }
 }

@@ -3,6 +3,7 @@
 // Réussite : bilan puis final sur l'accueil. Temps écoulé : message d'échec.
 import { PLANT_BY_ID } from '~/data/plants'
 import { RULES, formatTime, formatKwh } from '~/composables/useGame'
+import { onKiosk } from '~/utils/kiosk'
 
 // seule la centrale choisie sur l'accueil se joue, pendant sa partie
 definePageMeta({
@@ -23,6 +24,8 @@ const game = useGame()
 const { state } = game
 const hold = useIdleHold()
 const { play } = useSound()
+const leaderboard = useLeaderboard()
+const kioskApp = onKiosk()
 
 // ---------- Compte à rebours : il démarre au « C'est parti ! », s'arrête dès le plateau juste
 const elapsed = ref(0)
@@ -38,7 +41,8 @@ onMounted(() => {
   last = performance.now()
   timer = setInterval(() => {
     const now = performance.now()
-    if (started.value && !stopped.value && document.visibilityState === 'visible') {
+    // site web : le chrono continue onglet caché, comme celui du serveur (classement)
+    if (started.value && !stopped.value && (!kioskApp || document.visibilityState === 'visible')) {
       elapsed.value = Math.min(RULES.duration, elapsed.value + (now - last) / 1000)
       if (elapsed.value >= RULES.duration) onTimeUp()
     }
@@ -58,6 +62,7 @@ function begin () {
   state.value.onboarded = true
   started.value = true
   last = performance.now()
+  leaderboard.begin(plant.id) // site web : le serveur démarre aussi son chrono
   play('snap')
 }
 
@@ -128,6 +133,8 @@ function onComplete () {
   vibrate([30, 40, 30])
   setTimeout(() => play('complete'), 350)
   result.value = game.win({ time: elapsed.value, errors: errors.value })
+  // site web : le temps mesuré par le serveur fait foi pour le classement
+  leaderboard.finish(result.value).then(game.retime)
   setTimeout(() => { showResult.value = true }, 900)
 }
 // 0:00 juste après la 6e pièce : la vérification du plateau (380 ms plus tard)

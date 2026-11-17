@@ -22,6 +22,8 @@ export default defineNuxtConfig({
     // Classement Supabase du site web (côté serveur uniquement) : NUXT_SUPABASE_URL, NUXT_SUPABASE_KEY
     supabaseUrl: '',
     supabaseKey: '',
+    // Signature des jetons de partie (anti-triche du classement) : NUXT_GAME_SECRET
+    gameSecret: '',
     public: {
       // adresse publique du jeu (liens de partage) : NUXT_PUBLIC_SITE_URL
       siteUrl: '',

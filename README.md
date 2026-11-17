@@ -56,8 +56,11 @@ Les textes sont convertis en tracés parce que Trebuchet MS n'existe pas sur And
 
 Même jeu que la borne, construit par `nuxt build`. La page détecte la borne par `window.kiosk` (`onKiosk()` dans `app/utils/kiosk.js`) ; sans lui, elle est en mode site web :
 
-- **Classement partagé** : `/api/scores` (`server/`), sur Supabase si `NUXT_SUPABASE_URL` et `NUXT_SUPABASE_KEY` sont définis, sinon dans un fichier local (`.data/scores`). Le navigateur envoie le pseudo, la centrale, le temps et les erreurs ; les kWh sont recalculés par le serveur, puis par la base (`submit_plant_score`).
-- **Base** : exécuter `supabase/migrations/0002_une_centrale.sql` avant de mettre en ligne. Les anciennes parties à cinq centrales restent en base, hors classement.
+- **Classement partagé** : `/api/scores` (`server/`), sur Supabase si `NUXT_SUPABASE_URL` et `NUXT_SUPABASE_KEY` sont définis, sinon dans un fichier local (`.data/scores`).
+- **Anti-triche** : le serveur chronomètre la partie. `/api/games/start` remet un jeton signé quand le chrono démarre ; `/api/games/finish` mesure le temps écoulé et remet un jeton de résultat ; `/api/scores` n'accepte qu'un pseudo et ce jeton. Le navigateur n'envoie donc jamais de score, et une partie ne s'enregistre qu'une fois. Le temps annoncé par la page n'est retenu que s'il est à 3 s près de la mesure du serveur ; moins de 8 s est refusé. Les kWh sont calculés par le serveur, puis par la base (`submit_plant_score`). Sur le site, le chrono continue quand l'onglet est caché.
+  - `NUXT_GAME_SECRET` (obligatoire en production) : secret de signature des jetons, par exemple `openssl rand -hex 32`. Sans lui, aucun score ne s'enregistre.
+  - Limite connue : un script qui attend 8 s entre le départ et la fin obtient encore un bon score, le serveur ne voyant pas le plateau. Pas de limitation par adresse IP.
+- **Base** : exécuter `supabase/migrations/0002_une_centrale.sql` puis `0003_partie_unique.sql` avant de mettre en ligne. Les anciennes parties à cinq centrales restent en base, hors classement.
 - **Carte souvenir** à partager (LinkedIn, WhatsApp, Facebook, X, téléchargement) dans le bilan. `NUXT_PUBLIC_SITE_URL` fixe l'adresse citée dans le texte.
 - Pas de retour automatique à l'accueil, pas de clavier tactile, pas d'espace personnel ; menu contextuel et réglage « réduire les animations » du navigateur respectés.
 
