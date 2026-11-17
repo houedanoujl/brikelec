@@ -3,7 +3,7 @@
 import { formatKwh, formatTime } from '~/composables/useGame'
 
 const props = defineProps({
-  data: { type: Object, required: true }, // { name, kwh, time, errors, badges, rank }
+  data: { type: Object, required: true }, // { name, plantName, kwh, time, errors, rank }
 })
 const emit = defineEmits(['shared'])
 const { render } = useShareCard()
@@ -18,8 +18,8 @@ const siteUrl = computed(() => config.public.siteUrl || (import.meta.client ? wi
 const text = computed(() => {
   const d = props.data
   const rank = d.rank ? ` et je suis ${d.rank === 1 ? '1er' : `${d.rank}e`} au classement` : ''
-  return `J'ai allumé la centrale du futur de CIPREL : ${formatKwh(d.kwh)} produits en ${formatTime(d.time)}${rank} ! ` +
-    `Hydrogène, biomasse, cycle combiné, solaire et éolien : 5 puzzles pour alimenter Abidjan. À vous de jouer : ${siteUrl.value} ` +
+  return `J'ai assemblé la centrale ${d.plantName} de CIPREL et alimenté Abidjan à 100 % : ${formatKwh(d.kwh)} produits en ${formatTime(d.time)}${rank} ! ` +
+    `Hydrogène, biomasse, cycle combiné, solaire ou éolien : choisissez votre centrale, vous avez 2 minutes. À vous de jouer : ${siteUrl.value} ` +
     '#CIPREL #Énergie #CôteDIvoire #Abidjan'
 })
 
@@ -117,7 +117,7 @@ function onDownload () { download(); message.value = 'Carte téléchargée.'; em
 .share { display: grid; gap: 12px; padding: 14px; border-radius: var(--radius); background: var(--tray); border: 2px solid var(--line); }
 .share h3 { font-size: 1.15rem; }
 .card { width: 100%; max-width: 360px; border-radius: 14px; box-shadow: var(--shadow); justify-self: center; }
-.card.ph { aspect-ratio: 1200 / 1260; background: #dfe8ee; }
+.card.ph { aspect-ratio: 1200 / 1200; background: #dfe8ee; }
 .buttons { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 .btn.linkedin { background: #0a66c2; color: #fff; border-color: #073f78; }
 .btn.linkedin:hover { background: #0854a0; }

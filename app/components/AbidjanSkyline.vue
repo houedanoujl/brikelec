@@ -3,7 +3,8 @@
 // Même main que les schémas du client : aplats, formes simples, palette
 // des bleus gris, ciel, verts et marine. Aucun dégradé.
 //
-// level (0 à 5) : centrales allumées. Chaque fenêtre porte data-step (1 à 5) ;
+// level (0 à 5) : part de la ville alimentée, par cinquièmes (sur la borne, la
+// centrale choisie fait passer la ville de 0 à 5 d'un coup). Chaque fenêtre porte data-step (1 à 5) ;
 // elle s'allume quand level >= step. À 5, Tour F et haubans du pont s'allument.
 // L'état au repos est porté par les classes CSS (rendu serveur, mouvement réduit) ;
 // GSAP anime les passages : mise sous tension à chaque palier, vie de la ville,
@@ -18,9 +19,9 @@ const lvl = computed(() => Math.max(0, Math.min(5, Math.round(props.level || 0))
 
 const ariaLabel = computed(() => {
   const n = lvl.value
-  if (n === 0) return 'Abidjan au crépuscule : aucune centrale n’alimente encore la ville'
-  if (n === 5) return 'Abidjan illuminée : les 5 centrales sur 5 alimentent la ville'
-  return `Abidjan : ${n} centrale${n > 1 ? 's' : ''} sur 5 alimente${n > 1 ? 'nt' : ''} la ville`
+  if (n === 0) return 'Abidjan au crépuscule : la ville attend son électricité'
+  if (n === 5) return 'Abidjan illuminée : la ville est alimentée à 100 %'
+  return `Abidjan alimentée à ${n * 20} %`
 })
 
 const rootClass = computed(() => {
@@ -44,7 +45,11 @@ const briAt = n => +(0.72 + 0.28 * n / 5).toFixed(3)
 const sat = computed(() => satAt(lvl.value))
 const bri = computed(() => briAt(lvl.value))
 const fid = `abj-${useId().replace(/[^\w-]/g, '')}`
-const furl = `url(#${fid})`
+// Ville entièrement alimentée : le filtre ne change plus rien (saturation et
+// luminosité à 1). On le retire une fois l'allumage fini : les bateaux et les
+// feux d'artifice ne forcent plus à refiltrer la ville à chaque image (borne i3).
+const neutral = ref(lvl.value >= 5)
+const furl = computed(() => (neutral.value ? undefined : `url(#${fid})`))
 
 // ------------------------------------------------------------ pseudo-hasard
 function mulberry32 (seed) {
@@ -335,6 +340,7 @@ function powerUp (from, to) {
       }
     }
     tl.set('.win, .refl', { clearProps: 'fill,stroke,opacity' })
+    if (to >= 5) tl.call(() => { neutral.value = true }, null, 1.15 + 2.6)
     if (to >= 5) tl.add(finale(), '-=0.6')
     return tl
   })
@@ -487,8 +493,9 @@ watch(lvl, (n, o) => {
   } else if (n > o) {
     startPulses()
     updatePulseSpeed()
-    if (n >= 5) startFinaleLoops()
+    if (n >= 5) { neutral.value = true; startFinaleLoops() }
   } else if (n < o) {
+    neutral.value = false
     finaleLoops = false
   }
 }, { flush: 'post' })
@@ -815,7 +822,8 @@ defineExpose({ powerUp, burst })
 .nav-red { fill: #ff4a3d; }
 .strobe { fill: #ffffff; }
 
+/* sur la borne (classe kiosk), le final reste animé même si Windows réduit les animations */
 @media (prefers-reduced-motion: reduce) {
-  .abidjan *, .abidjan *::before, .abidjan *::after { animation: none !important; }
+  html:not(.kiosk) .abidjan *, html:not(.kiosk) .abidjan *::before, html:not(.kiosk) .abidjan *::after { animation: none !important; }
 }
 </style>

@@ -1,5 +1,5 @@
-// Carte souvenir PNG : la centrale du futur allumée + le bilan de la partie.
-import { formatTime, formatKwh, BADGE_BY_ID } from '~/composables/useGame'
+// Carte souvenir PNG (site web) : la centrale du futur allumée + le bilan de la partie.
+import { formatTime, formatKwh } from '~/composables/useGame'
 
 function loadImage (src) {
   return new Promise((resolve, reject) => {
@@ -13,8 +13,8 @@ function loadImage (src) {
 export function useShareCard () {
   const { full } = useArt()
 
-  async function render ({ name, kwh, time, errors, badges, rank }) {
-    const W = 1200, H = 1260
+  async function render ({ name, plantName, kwh, time, errors, rank }) {
+    const W = 1200, H = 1200
     const c = document.createElement('canvas')
     c.width = W; c.height = H
     const g = c.getContext('2d')
@@ -35,18 +35,15 @@ export function useShareCard () {
     } catch { /* logo indisponible */ }
     g.fillStyle = '#ffffff'
     g.font = '600 30px "Nunito", sans-serif'
-    g.fillText(`${name || 'Joueur·se'} a allumé la centrale du futur`, 60, 965)
+    g.fillText(`${name || 'Joueur·se'} a alimenté Abidjan avec la centrale ${plantName}`.slice(0, 58), 60, 965)
     g.fillStyle = '#ed7f06'
     g.font = '800 96px "Baloo 2", sans-serif'
     g.fillText(formatKwh(kwh), 60, 1070)
     g.fillStyle = '#c9d4de'
     g.font = '600 32px "Nunito", sans-serif'
-    const meta = [`${formatTime(time)}`, `${errors} erreur${errors > 1 ? 's' : ''}`]
-    if (rank) meta.push(`${rank}ᵉ au classement`)
+    const meta = [`Assemblée en ${formatTime(time)}`, `${errors} erreur${errors > 1 ? 's' : ''}`]
+    if (rank) meta.push(rank === 1 ? '1ʳᵉ place au classement' : `${rank}ᵉ au classement`)
     g.fillText(meta.join('   ·   '), 60, 1130)
-    const names = badges.map(b => BADGE_BY_ID[b]?.name).filter(Boolean)
-    g.font = '600 26px "Nunito", sans-serif'
-    g.fillText(`${names.length} récompense${names.length > 1 ? 's' : ''} : ${names.slice(0, 5).join(', ')}${names.length > 5 ? '…' : ''}`, 60, 1190)
     return await new Promise(r => c.toBlob(r, 'image/png'))
   }
 
@@ -55,7 +52,7 @@ export function useShareCard () {
     const file = new File([blob], 'centrale-du-futur.png', { type: 'image/png' })
     if (navigator.canShare?.({ files: [file] })) {
       try {
-        await navigator.share({ files: [file], title: 'La centrale du futur', text: `J'ai produit ${formatKwh(data.kwh)} en assemblant la centrale du futur !` })
+        await navigator.share({ files: [file], title: 'La centrale du futur', text: `J'ai produit ${formatKwh(data.kwh)} en assemblant la centrale ${data.plantName} !` })
         return 'shared'
       } catch (e) {
         if (e?.name === 'AbortError') return 'aborted'

@@ -1,10 +1,19 @@
-// Classement partagé.
+// Classement partagé du site web (la borne Electron garde le sien, hors ligne,
+// dans localStorage : voir app/composables/useLeaderboard.js).
 // - Supabase si NUXT_SUPABASE_URL et NUXT_SUPABASE_KEY sont définis (voir supabase/migrations) :
-//   lecture de la table « scores », écriture via la fonction submit_score (validation côté base).
+//   lecture de la table « scores », écriture via la fonction submit_plant_score (validation côté base).
 // - Sinon, stockage Nitro « scores » (fichier .data en local).
+// Seules les parties « une centrale en 2 minutes » sont classées : les anciennes
+// parties à cinq centrales (colonne plant vide) restent en base, hors classement.
 const KEY = 'leaderboard'
 export const MAX_ENTRIES = 200
 export const PLANT_IDS = ['hydrogene', 'biomasse', 'cycle', 'solaire', 'eolien']
+
+// Mêmes règles que RULES dans app/composables/useGame.js
+// minTime : en dessous, six pièces ne se posent pas à la main ; grace : marge réseau (s) ;
+// ticketMs : délai pour saisir son pseudo après le puzzle.
+export const SCORE = { duration: 120, base: 1000, perSecondLeft: 10, minTime: 8, grace: 3, ticketMs: 30 * 60_000 }
+export const kwhFor = time => SCORE.base + (SCORE.duration - time) * SCORE.perSecondLeft
 
 function supabase () {
   const { supabaseUrl, supabaseKey } = useRuntimeConfig()
@@ -16,11 +25,11 @@ function supabase () {
 
 export const usingSupabase = () => !!supabase()
 
-// Tri : kWh décroissants, puis temps, puis erreurs, puis ancienneté.
-export const compare = (a, b) => b.kwh - a.kwh || a.time - b.time || a.errors - b.errors || a.at - b.at
+// Tri : kWh décroissants, puis temps, puis ancienneté (comme sur la borne).
+export const compare = (a, b) => b.kwh - a.kwh || a.time - b.time || a.at - b.at
 
 export function publicEntry (e, i) {
-  return { rank: i + 1, id: e.id, name: e.name, kwh: e.kwh, time: e.time, errors: e.errors, perfect: e.perfect, at: e.at }
+  return { rank: i + 1, id: e.id, name: e.name, plant: e.plant, kwh: e.kwh, time: e.time, errors: e.errors, at: e.at }
 }
 
 export async function topScores (limit) {
@@ -31,8 +40,9 @@ export async function topScores (limit) {
       res = await $fetch.raw(`${sb.base}/rest/v1/scores`, {
         headers: { ...sb.headers, Prefer: 'count=exact' },
         query: {
-          select: 'id,name,kwh,time_s,errors,perfect,created_at',
-          order: 'kwh.desc,time_s.asc,errors.asc,created_at.asc',
+          select: 'id,name,plant,kwh,time_s,errors,created_at',
+          plant: 'not.is.null',
+          order: 'kwh.desc,time_s.asc,created_at.asc',
           limit,
         },
       })
@@ -43,45 +53,42 @@ export async function topScores (limit) {
     }
     const total = +(res.headers.get('content-range') || '').split('/')[1] || res._data.length
     const entries = res._data.map((r, i) => publicEntry({
-      id: r.id, name: r.name, kwh: r.kwh, time: r.time_s, errors: r.errors, perfect: r.perfect, at: Date.parse(r.created_at),
+      id: r.id, name: r.name, plant: r.plant, kwh: r.kwh, time: r.time_s, errors: r.errors, at: Date.parse(r.created_at),
     }, i))
     return { total, entries }
   }
-  const list = ((await useStorage('scores').getItem(KEY)) || []).sort(compare)
+  const list = ((await useStorage('scores').getItem(KEY)) || []).filter(e => e?.plant).sort(compare)
   return { total: list.length, entries: list.slice(0, limit).map(publicEntry) }
 }
 
-// plants : { id: { kwh, time, errors } } déjà validés et arrondis par l'API
-export async function saveScore (name, plants) {
+// { id, name, plant, time, errors } issus du jeton de résultat ; renvoie { id, rank, total }.
+// id : identifiant de la partie, refusé s'il est déjà au classement.
+export async function saveScore ({ id, name, plant, time, errors }) {
   const sb = supabase()
   if (sb) {
     try {
-      const r = await $fetch(`${sb.base}/rest/v1/rpc/submit_score`, {
+      const r = await $fetch(`${sb.base}/rest/v1/rpc/submit_plant_score`, {
         method: 'POST',
         headers: sb.headers,
-        body: { p_name: name, p_plants: plants },
+        body: { p_game: id, p_name: name, p_plant: plant, p_time: time, p_errors: errors },
       })
-      return {
-        rank: r.rank,
-        total: r.total,
-        entry: { rank: r.rank, id: r.id, name, kwh: r.kwh, time: r.time, errors: r.errors, perfect: r.errors === 0, at: Date.now() },
-      }
+      return { id: r.id, rank: r.rank, total: r.total }
     } catch (e) {
-      // 400 : refus de submit_score (message de validation, à afficher) ; sinon panne
+      // 400 : refus de submit_plant_score (message de validation, à afficher) ; sinon panne
+      // 409 : partie déjà enregistrée (game_id unique)
+      if (e?.statusCode === 409) throw createError({ statusCode: 409, statusMessage: 'Cette partie est déjà au classement.' })
       if (e?.statusCode === 400 && e?.data?.message) throw createError({ statusCode: 400, statusMessage: e.data.message })
       console.error('[classement] envoi Supabase impossible :', e?.data?.message || e?.message)
       throw createError({ statusCode: 502, statusMessage: 'Classement indisponible.' })
     }
   }
-  const { randomUUID } = await import('node:crypto')
-  const sum = k => PLANT_IDS.reduce((s, id) => s + plants[id][k], 0)
-  const entry = { id: randomUUID(), name, kwh: sum('kwh'), time: sum('time'), errors: sum('errors'), at: Date.now() }
-  entry.perfect = entry.errors === 0
+  const entry = { id, name, plant, kwh: kwhFor(time), time, errors, at: Date.now() }
   const storage = useStorage('scores')
-  const list = (await storage.getItem(KEY)) || []
+  const list = ((await storage.getItem(KEY)) || []).filter(e => e?.plant)
+  if (list.some(e => e.id === id)) throw createError({ statusCode: 409, statusMessage: 'Cette partie est déjà au classement.' })
   list.push(entry)
   list.sort(compare)
   const rank = list.findIndex(e => e.id === entry.id) + 1
   await storage.setItem(KEY, list.slice(0, MAX_ENTRIES))
-  return { rank, total: list.length, entry: publicEntry(entry, rank - 1) }
+  return { id: entry.id, rank, total: list.length }
 }

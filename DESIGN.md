@@ -91,8 +91,8 @@ Un jeu, pas un tableau de bord. L'interface prolonge l'univers des schémas du c
 
 ## Layout
 - Pages sur fond ciel, largeur maximale de 1440 px, marges de 16 px sur mobile.
-- Accueil : la scène d'ensemble domine, la ville d'Abidjan l'accompagne juste dessous, le panneau des centrales et des guides est sur le côté (ou dessous sous 1024 px).
-- Puzzle : barre compacte (retour, nom, jauge des pièces, chrono, erreurs, coup de pouce), puis le plateau sur toute la hauteur disponible.
+- Accueil : la scène d'ensemble domine (les 5 centrales en couleur), la ville d'Abidjan l'accompagne juste dessous, le panneau du guide et des 5 boutons de choix est sur le côté (ou dessous sous 1024 px).
+- Puzzle : barre compacte (abandon, nom, jauge des pièces, compte à rebours, erreurs, son), puis le plateau sur toute la hauteur disponible.
 
 ## Elevation & Depth
 Peu de profondeur, comme dans l'illustration. Panneaux : ombre douce décalée `0 6px 18px rgba(31,40,50,.10)`. Pièce en cours de glisser : ombre portée SVG plus forte. Pas de halo coloré sans décalage, pas d'ombre dure sans flou.
@@ -106,7 +106,9 @@ Formes en pilule pour les boutons, puces et pastilles (comme les étiquettes des
 - **Puce** : pilule blanche au trait clair, avec chiffre et pictogramme.
 - **Bulle de guide** : bulle blanche au trait encre de 3 px et 18 px de rayon, avec sa pointe vers le personnage.
 - **Jauge des pièces** : 6 pastilles qui se remplissent à l'orange.
-- **Toast de récompense** : médaille et nom, glisse depuis le haut et disparaît seul après 3,5 s.
+- **Compte à rebours** : pilule blanche au trait encre de 3 px, Baloo 800 ; rouge et pulsant dans les 20 dernières secondes.
+- **Clavier de la borne** : touches blanches de 56 px au trait encre, ombre pleine qui s'écrase à l'appui ; touche Valider orange.
+- **Techniciens CIPREL** : tenue des équipes (combinaison bleu marine, passepoil orange, bandes réfléchissantes grises bordées d'orange, casque bleu à coquilles).
 
 ## Do's and Don'ts
 - Garder les schémas du client tels quels : animer un schéma (flux qui circulent) ne doit jamais changer son rendu au repos.

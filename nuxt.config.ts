@@ -1,7 +1,11 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
+// Application monopage, deux cibles :
+// - borne hors ligne (nuxt generate + Electron) : sans serveur ni ressource distante ;
+// - site web (nuxt build, Vercel) : même jeu, avec le classement partagé (/api/scores).
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
   devtools: { enabled: false },
+  ssr: false,
   css: ['~/assets/css/main.css'],
   app: {
     head: {
@@ -9,22 +13,19 @@ export default defineNuxtConfig({
       title: 'La centrale du futur — CIPREL',
       meta: [
         { name: 'viewport', content: 'width=device-width, initial-scale=1, viewport-fit=cover' },
-        { name: 'description', content: 'Assemblez les cinq centrales (hydrogène, biomasse, cycle combiné, solaire, éolien) pour allumer la centrale du futur.' },
+        { name: 'description', content: 'Choisissez une centrale (hydrogène, biomasse, cycle combiné, solaire, éolien), assemblez-la en 2 minutes et alimentez Abidjan.' },
         { name: 'theme-color', content: '#ed7f06' },
-      ],
-      link: [
-        { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
-        { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' },
-        { rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@500;600;700;800&display=swap' },
       ],
     },
   },
   runtimeConfig: {
-    // Classement Supabase (côté serveur uniquement) : NUXT_SUPABASE_URL, NUXT_SUPABASE_KEY
+    // Classement Supabase du site web (côté serveur uniquement) : NUXT_SUPABASE_URL, NUXT_SUPABASE_KEY
     supabaseUrl: '',
     supabaseKey: '',
+    // Signature des jetons de partie (anti-triche du classement) : NUXT_GAME_SECRET
+    gameSecret: '',
     public: {
-      // adresse publique du jeu (liens de partage, image Open Graph) : NUXT_PUBLIC_SITE_URL
+      // adresse publique du jeu (liens de partage) : NUXT_PUBLIC_SITE_URL
       siteUrl: '',
     },
   },

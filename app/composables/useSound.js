@@ -1,7 +1,9 @@
 // Sons du jeu, synthétisés avec Web Audio (aucun fichier à charger).
 // Discrets et liés à une action : prise et pose d'une pièce, erreur, verrouillage,
-// centrale terminée, mise sous tension, ville qui s'allume, récompense, final.
-const KEY = 'centrale-du-futur:son'
+// centrale terminée, mise sous tension, ville qui s'allume, final, dernières
+// secondes et temps écoulé.
+// Le choix « son coupé » n'est pas mémorisé : sur la borne, chaque joueur
+// commence avec le son (voir reset() dans useGame).
 let ctx = null
 let master = null
 
@@ -47,7 +49,10 @@ const SOUNDS = {
   power: () => { tone(80, 0, 1.1, { type: 'sawtooth', vol: 0.08, to: 240, attack: 0.3 }); tone(160, 0.2, 1, { vol: 0.12, to: 480, attack: 0.3 }); tone(960, 1.05, 0.5, { vol: 0.12 }) },
   // la ville s'allume : carillon scintillant, en vague
   city: () => [1318.5, 1568, 1760, 2093, 1975.5, 2349.3].forEach((f, i) => tone(f, 0.25 + i * 0.13, 0.6, { vol: 0.1 })),
-  badge: () => { tone(1568, 0, 0.12, { vol: 0.18 }); tone(2093, 0.09, 0.3, { vol: 0.16 }) },
+  // dernières secondes du compte à rebours
+  tick: () => tone(1046.5, 0, 0.06, { type: 'square', vol: 0.06 }),
+  // temps écoulé : trois notes qui descendent
+  fail: () => [392, 329.63, 261.63].forEach((f, i) => tone(f, i * 0.2, 0.42, { type: 'triangle', vol: 0.3, to: f * 0.94 })),
   // feu d'artifice : coup sourd puis crépitement d'étincelles
   burst: () => {
     tone(140, 0, 0.35, { type: 'triangle', vol: 0.18, to: 60 })
@@ -61,18 +66,12 @@ const SOUNDS = {
 
 export function useSound () {
   const muted = useState('sound-muted', () => false)
-  const loaded = useState('sound-loaded', () => false)
-  if (import.meta.client && !loaded.value) {
-    loaded.value = true
-    try { muted.value = localStorage.getItem(KEY) === 'off' } catch { /* stockage indisponible */ }
-  }
   function play (name) {
     if (muted.value || !SOUNDS[name]) return
     try { SOUNDS[name]() } catch { /* audio indisponible */ }
   }
   function toggle () {
     muted.value = !muted.value
-    try { localStorage.setItem(KEY, muted.value ? 'off' : 'on') } catch { /* idem */ }
     if (!muted.value) play('snap')
   }
   return { muted, play, toggle }

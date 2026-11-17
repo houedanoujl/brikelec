@@ -1,10 +1,11 @@
 // Animations GSAP d'un composant :
 // - toutes les animations créées via run() sont rattachées à un gsap.context
 //   limité à l'élément racine, et annulées (revert) au démontage ;
-// - reduced : vrai si le système demande de réduire les animations ;
+// - reduced : vrai si le système demande de réduire les animations (jamais sur la borne) ;
 // - loop() enregistre une animation d'ambiance, mise en pause quand le composant
 //   sort de l'écran ou que l'onglet est caché.
 import gsap from 'gsap'
+import { onKiosk } from '~/utils/kiosk'
 
 export function useGsap (scope) {
   const reduced = ref(false)
@@ -20,8 +21,8 @@ export function useGsap (scope) {
 
   onMounted(() => {
     const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
-    reduced.value = mq.matches
-    mq.addEventListener?.('change', (e) => { reduced.value = e.matches })
+    reduced.value = mq.matches && !onKiosk()
+    mq.addEventListener?.('change', (e) => { reduced.value = e.matches && !onKiosk() })
     ctx = gsap.context(() => {}, scope.value)
     io = new IntersectionObserver(([e]) => { visible = e.isIntersecting; sync() }, { threshold: 0.05 })
     io.observe(scope.value)
