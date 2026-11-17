@@ -1,6 +1,6 @@
 # La centrale du futur : le puzzle
 
-Jeu Nuxt 4 de type drag & drop, conçu pour une **borne tactile Windows hors ligne** (application Electron), et qui marche aussi dans un navigateur. La vue d'ensemble « La centrale du futur » montre cinq centrales en couleur : hydrogène, biomasse, cycle combiné, solaire et éolien. Le joueur en **choisit une seule** et doit assembler ses 6 pièces en **2 minutes**. S'il réussit, seule sa centrale démarre et alimente **Abidjan à 100 %** ; sinon, un message d'échec s'affiche. Le classement est local à la borne.
+Jeu Nuxt 4 de type drag & drop, conçu pour une **borne tactile Windows hors ligne** (application Electron), et publié aussi comme **site web** (Vercel) depuis le même code. La vue d'ensemble « La centrale du futur » montre cinq centrales en couleur : hydrogène, biomasse, cycle combiné, solaire et éolien. Le joueur en **choisit une seule** et doit assembler ses 6 pièces en **2 minutes**. S'il réussit, seule sa centrale démarre et alimente **Abidjan à 100 %** ; sinon, un message d'échec s'affiche. Le classement est local à la borne, et partagé en ligne sur le site web.
 
 ```bash
 npm install
@@ -50,7 +50,16 @@ Les textes sont convertis en tracés parce que Trebuchet MS n'existe pas sur And
 - À 0:00, le plateau se fige (une pièce tenue retourne à sa place) et le message « Échec : temps écoulé » s'affiche. La partie n'est pas classée.
 - Réussite : **1000 kWh + 10 kWh par seconde restante** (2200 kWh au maximum). Les erreurs sont affichées mais ne comptent pas : elles coûtent déjà du temps. Étoiles selon le temps : 3 en 1 min ou moins, 2 en 1 min 30 ou moins, 1 au-delà.
 - Les réglages sont dans `app/composables/useGame.js` (`RULES`).
-- Final : seule la centrale choisie démarre (rotors, fumée, bulles), l'énergie part vers Abidjan, qui s'allume à 100 % avec feux d'artifice. Le bilan permet d'entrer un pseudo au clavier tactile du jeu (`TouchKeyboard.vue`) ; le score rejoint le classement.
+- Final : seule la centrale choisie démarre (rotors, fumée, bulles), l'énergie part vers Abidjan, qui s'allume à 100 % avec feux d'artifice. Le bilan permet d'entrer un pseudo (clavier tactile du jeu sur la borne, `TouchKeyboard.vue` ; champ ordinaire sur le site web) ; le score rejoint le classement.
+
+## Site web (Vercel)
+
+Même jeu que la borne, construit par `nuxt build`. La page détecte la borne par `window.kiosk` (`onKiosk()` dans `app/utils/kiosk.js`) ; sans lui, elle est en mode site web :
+
+- **Classement partagé** : `/api/scores` (`server/`), sur Supabase si `NUXT_SUPABASE_URL` et `NUXT_SUPABASE_KEY` sont définis, sinon dans un fichier local (`.data/scores`). Le navigateur envoie le pseudo, la centrale, le temps et les erreurs ; les kWh sont recalculés par le serveur, puis par la base (`submit_plant_score`).
+- **Base** : exécuter `supabase/migrations/0002_une_centrale.sql` avant de mettre en ligne. Les anciennes parties à cinq centrales restent en base, hors classement.
+- **Carte souvenir** à partager (LinkedIn, WhatsApp, Facebook, X, téléchargement) dans le bilan. `NUXT_PUBLIC_SITE_URL` fixe l'adresse citée dans le texte.
+- Pas de retour automatique à l'accueil, pas de clavier tactile, pas d'espace personnel ; menu contextuel et réglage « réduire les animations » du navigateur respectés.
 
 ## Borne hors ligne (Electron)
 

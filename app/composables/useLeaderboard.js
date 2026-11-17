@@ -1,10 +1,14 @@
-// Classement de la borne, conservé dans localStorage (seule donnée persistée).
-// Dans l'application Electron, l'origine app://borne ne change jamais : le
-// classement survit aux redémarrages (dossier de l'application, « Local Storage »).
+// Classement.
+// - Borne (application Electron) : conservé dans localStorage, seule donnée
+//   persistée. L'origine app://borne ne change jamais : le classement survit aux
+//   redémarrages (dossier de l'application, « Local Storage »). Aucun réseau.
+// - Site web : classement partagé, via /api/scores (Supabase, voir server/utils/scores.js).
 import { PLANT_BY_ID } from '~/data/plants'
+import { onKiosk } from '~/utils/kiosk'
 
 const KEY = 'centrale-du-futur:classement:v1'
 export const MAX_ENTRIES = 200
+const REMOTE_LIMIT = 100
 
 // Tri : kWh décroissants, puis temps, puis ancienneté.
 export const compare = (a, b) => b.kwh - a.kwh || a.time - b.time || a.at - b.at
@@ -32,13 +36,40 @@ function write (list) {
 const uid = () => (globalThis.crypto?.randomUUID?.() || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`)
 
 export function useLeaderboard () {
+  const remote = import.meta.client && !onKiosk()
   const entries = useState('leaderboard', () => null)
-  if (import.meta.client && entries.value === null) entries.value = read()
+  const pending = useState('leaderboard-pending', () => false)
+  const error = useState('leaderboard-error', () => false)
+  if (import.meta.client && !remote && entries.value === null) entries.value = read()
 
   const ranked = computed(() => (entries.value || []).map((e, i) => ({ ...e, rank: i + 1, plantName: PLANT_BY_ID[e.plant]?.name || '' })))
 
-  // entrée validée : { name, plant, kwh, time, errors } ; renvoie { id, rank, total }
-  function add ({ name, plant, kwh, time, errors }) {
+  // Site web : recharge le classement partagé. Sur la borne, rien à faire.
+  async function refresh () {
+    if (!remote) return
+    pending.value = true
+    error.value = false
+    try {
+      const res = await $fetch('/api/scores', { query: { limit: REMOTE_LIMIT } })
+      entries.value = res.entries
+    } catch {
+      error.value = true
+    } finally {
+      pending.value = false
+    }
+  }
+
+  // entrée validée : { name, plant, kwh, time, errors } ; renvoie { id, rank, total }.
+  // Site web : le serveur recalcule les kWh ; une erreur réseau est levée à l'appelant.
+  async function add ({ name, plant, kwh, time, errors }) {
+    if (remote) {
+      const saved = await $fetch('/api/scores', {
+        method: 'POST',
+        body: { name: cleanName(name), plant, time: Math.round(time), errors: Math.round(errors) || 0 },
+      })
+      refresh()
+      return { id: saved.id, rank: saved.rank, total: saved.total }
+    }
     const entry = { id: uid(), name: cleanName(name), plant, kwh: Math.round(kwh), time: Math.round(time), errors: Math.round(errors) || 0, at: Date.now() }
     const list = [...(entries.value || []), entry].sort(compare)
     const rank = list.findIndex(e => e.id === entry.id) + 1
@@ -48,10 +79,12 @@ export function useLeaderboard () {
     return { id: entry.id, rank, total: list.length }
   }
 
+  // Borne uniquement (espace personnel).
   function clear () {
+    if (remote) return
     entries.value = []
     try { localStorage.removeItem(KEY) } catch { /* idem */ }
   }
 
-  return { entries: ranked, add, clear }
+  return { entries: ranked, pending, error, remote, refresh, add, clear }
 }

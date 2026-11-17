@@ -1,5 +1,7 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
-// Borne hors ligne : application monopage (nuxt generate), sans serveur ni ressource distante.
+// Application monopage, deux cibles :
+// - borne hors ligne (nuxt generate + Electron) : sans serveur ni ressource distante ;
+// - site web (nuxt build, Vercel) : même jeu, avec le classement partagé (/api/scores).
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
   devtools: { enabled: false },
@@ -14,6 +16,21 @@ export default defineNuxtConfig({
         { name: 'description', content: 'Choisissez une centrale (hydrogène, biomasse, cycle combiné, solaire, éolien), assemblez-la en 2 minutes et alimentez Abidjan.' },
         { name: 'theme-color', content: '#ed7f06' },
       ],
+    },
+  },
+  runtimeConfig: {
+    // Classement Supabase du site web (côté serveur uniquement) : NUXT_SUPABASE_URL, NUXT_SUPABASE_KEY
+    supabaseUrl: '',
+    supabaseKey: '',
+    public: {
+      // adresse publique du jeu (liens de partage) : NUXT_PUBLIC_SITE_URL
+      siteUrl: '',
+    },
+  },
+  nitro: {
+    // Secours si Supabase n'est pas configuré : stockage fichier (.data/scores).
+    storage: {
+      scores: { driver: 'fs', base: './.data/scores' },
     },
   },
 })

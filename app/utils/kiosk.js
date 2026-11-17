@@ -1,8 +1,9 @@
 // Réglages de la borne.
 export const KIOSK = {
   idleMs: 60_000,   // sans contact : retour à l'accueil, partie remise à zéro
-  // code du personnel dans un navigateur (développement) ; sur la borne, il est
-  // vérifié par electron/main.cjs et se règle dans borne.json
+  // code du personnel dans un navigateur, en développement seulement (l'espace
+  // personnel n'existe pas sur le site en ligne) ; sur la borne, il est vérifié
+  // par electron/main.cjs et se règle dans borne.json
   browserPin: '2026',
   staffTaps: 5,
   staffTapWindow: 3000,

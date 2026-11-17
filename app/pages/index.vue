@@ -1,5 +1,5 @@
 <script setup>
-// Accueil de la borne.
+// Accueil (borne et site web).
 // - choose : les cinq centrales en couleur ; le joueur en choisit UNE à assembler.
 // - finale : après la réussite, seule la centrale choisie démarre et alimente
 //   Abidjan à 100 % ; bilan, pseudo et classement.
@@ -65,18 +65,34 @@ const guideText = computed(() => {
   return `Bravo ! Ta centrale ${chosen.value?.name} alimente Abidjan à 100 % !`
 })
 
-// ---------- Score : pseudo saisi au clavier de la borne, classement local
+// ---------- Score
+// Borne : pseudo saisi au clavier tactile du jeu, classement local.
+// Site web : champ de saisie ordinaire, classement partagé en ligne.
+const kioskApp = onKiosk()
 const name = ref('')
 const sendError = ref('')
-function save () {
+const sending = ref(false)
+async function save () {
+  if (sending.value || state.value.saved) return
   sendError.value = ''
   const n = cleanName(name.value)
   if (n.length < 2) { sendError.value = 'Choisissez un pseudo d’au moins 2 caractères.'; return }
   const r = result.value
-  state.value.saved = leaderboard.add({ name: n, plant: state.value.chosen, kwh: r.kwh, time: r.time, errors: r.errors })
-  name.value = n
-  play('lock')
+  sending.value = true
+  try {
+    state.value.saved = await leaderboard.add({ name: n, plant: state.value.chosen, kwh: r.kwh, time: r.time, errors: r.errors })
+    name.value = n
+    play('lock')
+  } catch (e) {
+    sendError.value = e?.data?.statusMessage || 'Envoi impossible. Vérifiez la connexion et réessayez.'
+  } finally {
+    sending.value = false
+  }
 }
+// carte souvenir à partager (site web)
+const shareData = computed(() => result.value && chosen.value
+  ? { name: name.value, plantName: chosen.value.name, kwh: result.value.kwh, time: result.value.time, errors: result.value.errors, rank: state.value.saved?.rank }
+  : null)
 const meEntry = computed(() => state.value.saved && result.value
   ? { rank: state.value.saved.rank, name: name.value, kwh: result.value.kwh, time: result.value.time, plantName: chosen.value?.name }
   : null)
@@ -86,11 +102,12 @@ function newGame () { game.reset() }
 const showBoard = ref(false)
 
 // ---------- Accès du personnel : bouton « Quitter » de la borne (ou 5 touchers
-// rapides sur le logo), puis code
+// rapides sur le logo), puis code. Absent du site en ligne.
 const showStaff = ref(false)
-const kioskApp = onKiosk()
+const staffAccess = kioskApp || import.meta.dev
 let taps = []
 function onLogo () {
+  if (!staffAccess) return
   const now = Date.now()
   taps = [...taps.filter(t => now - t < KIOSK.staffTapWindow), now]
   if (taps.length >= KIOSK.staffTaps) { taps = []; showStaff.value = true }
@@ -201,12 +218,14 @@ function onLogo () {
         <form v-if="!state.saved" class="submit" @submit.prevent="save">
           <label for="pseudo">Votre pseudo pour le classement</label>
           <div class="row">
-            <input id="pseudo" :value="name" readonly inputmode="none" maxlength="20" placeholder="Touchez les lettres ci-dessous" aria-describedby="pseudo-help">
-            <button class="btn" type="submit">Enregistrer</button>
+            <!-- borne : champ en lecture seule, rempli par le clavier du jeu -->
+            <input v-if="kioskApp" id="pseudo" :value="name" readonly inputmode="none" maxlength="20" placeholder="Touchez les lettres ci-dessous" aria-describedby="pseudo-help" class="touch">
+            <input v-else id="pseudo" v-model="name" maxlength="20" autocomplete="nickname" autocapitalize="words" enterkeyhint="done" placeholder="Votre pseudo">
+            <button class="btn" type="submit" :disabled="sending">{{ sending ? 'Envoi…' : 'Enregistrer' }}</button>
           </div>
-          <p id="pseudo-help" class="sr-only">Saisissez votre pseudo avec le clavier affiché.</p>
+          <p v-if="kioskApp" id="pseudo-help" class="sr-only">Saisissez votre pseudo avec le clavier affiché.</p>
           <p v-if="sendError" class="err" role="alert">{{ sendError }}</p>
-          <TouchKeyboard v-model="name" :maxlength="20" submit-label="Enregistrer" @submit="save" />
+          <TouchKeyboard v-if="kioskApp" v-model="name" :maxlength="20" submit-label="Enregistrer" @submit="save" />
         </form>
         <template v-else>
           <p class="ranked" role="status">
@@ -215,6 +234,8 @@ function onLogo () {
           </p>
           <LeaderboardPanel :highlight="state.saved.id" :me="meEntry" :limit="10" />
         </template>
+        <!-- site web : carte souvenir à partager (la borne est hors ligne) -->
+        <ShareSouvenir v-if="!kioskApp && showFinal && shareData" :data="shareData" />
         <div class="actions">
           <button class="btn" :class="{ ghost: !state.saved }" type="button" @click="newGame"><AppIcon name="refresh" :size="18" />Nouvelle partie</button>
         </div>
@@ -225,7 +246,7 @@ function onLogo () {
       <LeaderboardPanel v-if="showBoard" :highlight="state.saved?.id" :me="meEntry" />
     </AppDialog>
 
-    <StaffPanel :open="showStaff" @close="showStaff = false" />
+    <StaffPanel v-if="staffAccess" :open="showStaff" @close="showStaff = false" />
   </div>
 </template>
 
@@ -297,8 +318,10 @@ function onLogo () {
 .submit .row { display: flex; gap: 8px; flex-wrap: wrap; }
 .submit input {
   flex: 1; min-width: 180px; min-height: 52px; padding: 0 14px; border-radius: 12px; border: 2px solid var(--line);
-  font: inherit; font-family: var(--font-display); font-weight: 700; font-size: 1.3rem; caret-color: transparent;
+  font: inherit; font-family: var(--font-display); font-weight: 700; font-size: 1.3rem;
 }
+.submit input.touch { caret-color: transparent; }
+.submit input:focus-visible { border-color: var(--navy); outline: 3px solid rgba(38, 69, 111, .25); outline-offset: 0; }
 .err { color: var(--bad); font-weight: 700; }
 .ranked { display: flex; align-items: center; gap: 8px; font-weight: 700; color: var(--navy); }
 .actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }

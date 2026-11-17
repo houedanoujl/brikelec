@@ -6,7 +6,9 @@ const props = defineProps({
   me: { type: Object, default: null }, // { rank, name, kwh, time, plantName } si hors du top affiché
   limit: { type: Number, default: 20 },
 })
-const { entries } = useLeaderboard()
+const { entries, pending, error, remote, refresh } = useLeaderboard()
+// site web : classement partagé, rechargé à chaque ouverture
+onMounted(refresh)
 const top = computed(() => entries.value.slice(0, props.limit))
 const meOutside = computed(() => props.me && !top.value.some(e => e.id === props.highlight))
 const medal = r => (r === 1 ? 'or' : r === 2 ? 'argent' : r === 3 ? 'bronze' : null)
@@ -14,7 +16,9 @@ const medal = r => (r === 1 ? 'or' : r === 2 ? 'argent' : r === 3 ? 'bronze' : n
 
 <template>
   <div class="board">
-    <p v-if="!top.length" class="state">Aucune partie enregistrée : soyez le premier ou la première !</p>
+    <p v-if="remote && pending && !top.length" class="state">Chargement du classement…</p>
+    <p v-else-if="remote && error" class="state">Classement indisponible pour le moment. <button class="btn ghost" type="button" @click="refresh()">Réessayer</button></p>
+    <p v-else-if="!top.length" class="state">Aucune partie enregistrée : soyez le premier ou la première !</p>
     <ol v-else class="list">
       <li v-for="e in top" :key="e.id" :class="{ me: e.id === props.highlight }">
         <span class="rank" :class="medal(e.rank)">
@@ -37,7 +41,7 @@ const medal = r => (r === 1 ? 'or' : r === 2 ? 'argent' : r === 3 ? 'bronze' : n
 </template>
 
 <style scoped>
-.state { color: var(--ink-2); }
+.state { color: var(--ink-2); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; max-height: min(60dvh, 520px); overflow: auto; }
 .list li {
   display: grid; grid-template-columns: 40px 1fr auto; grid-template-areas: "rank name kwh" "rank meta meta";

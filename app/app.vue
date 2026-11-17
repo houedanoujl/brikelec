@@ -1,8 +1,10 @@
 <script setup>
-// Borne : retour à l'accueil après 60 s sans contact ; chaque nouvelle partie
-// recrée la page affichée.
+// Chaque nouvelle partie recrée la page affichée.
+// Borne seulement : retour à l'accueil après 60 s sans contact.
+import { onKiosk } from '~/utils/kiosk'
+
 const { round } = useGame()
-useIdle()
+if (onKiosk()) useIdle()
 </script>
 
 <template>
